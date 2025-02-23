@@ -92,7 +92,7 @@ export function UserForm() {
                       </Button>
                     </CollapsibleTrigger>
                   </div>
-                  <CollapsibleContent className="space-y-4 px-4 py-2 sm:max-h-44 max-h-80  overflow-y-auto">
+                  <CollapsibleContent className="space-y-4 px-4 py-2 sm:max-h-44 max-h-72  overflow-y-auto">
                     {[1, 2, 3, 4].map((relay) => (
                       <div
                         key={relay}
