@@ -1,6 +1,12 @@
 export enum TriggerMode {
-  SWITCH = "Switch",
-  TTR = "Daily Time Trigger",
-  SRS = "Sunrise",
-  SST = "Sunset",
+  SWITCH = 'Switch',
+  SRS = 'Sunrise',
+  SST = 'Sunset',
+}
+
+export interface MQTTFormData {
+  key: string;
+  devId: string;
+  city: string;
+  relays: number[];
 }
