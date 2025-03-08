@@ -17,12 +17,15 @@ import { MQTTFormData, TriggerMode } from '@/app/types'
 import { toast } from 'sonner'
 
 export function UserForm () {
-  const [mode, setMode] = useState<string | undefined>(Object.keys(TriggerMode)[0])
+  const [mode, setMode] = useState<string>(Object.keys(TriggerMode)[0])
   const [formData, setFormData] = useState<MQTTFormData>({
     key: '',
     devId: '',
     city: '',
     relays: [0, 0, 0, 0],
+    hh: 0,
+    mm: 0,
+    mode: '',
   })
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>, index?: number) => {
@@ -31,40 +34,21 @@ export function UserForm () {
       setFormData((prev) => {
         const newRelays = [...prev.relays]
         newRelays[index] = Number(value)
-        return { ...prev, relays: newRelays }
+        return { ...prev, relays: newRelays, mode }
       })
     } else {
-      setFormData((prev) => ({ ...prev, [id]: value }))
+      setFormData((prev) => ({ ...prev, [id]: value, mode }))
     }
   }
 
-  const validateFormData = (formData: MQTTFormData): boolean => {
-    if (!mode) {
-      toast.error('Please select a trigger mode', { position: 'top-right' })
-      return false
-    }
+  const validateFormData = ({ key, devId, city, relays, hh, mm }: MQTTFormData): boolean => {
+    if (!mode) return toast.error('Please select a trigger mode', { position: 'top-right' }), false
+    if (!key.trim() || !devId.trim()) return toast.error('Please fill in the key and device ID', { position: 'top-right' }), false
+    if ((mode === 'SRS' || mode === 'SST') && !city?.trim()) return toast.error('Please fill in the city name', { position: 'top-right' }), false
+    if (mode === 'TTR' && (Number(hh) < 1 || Number(hh) > 23 || Number(mm) < 0 || Number(mm) > 59)) return toast.error('Please fill in a valid time', { position: 'top-right' }), false
+    if (relays.some(r => r < 0)) return toast.error('Relay values must be positive', { position: 'top-right' }), false
+    if (relays.every(r => r === 0)) return toast.error('Please fill in at least one relay value', { position: 'top-right' }), false
 
-    const { key, devId, city, relays } = formData
-
-    if (!key.trim() || !devId.trim()) {
-      toast.error('Please fill in the key and device ID', { position: 'top-right' })
-      return false
-    }
-
-    if ((mode === 'SRS' || mode === 'SST') && !city.trim()) {
-      toast.error('Please fill in the city name', { position: 'top-right' })
-      return false
-    }
-
-    if (relays.some((relay) => relay < 0)) {
-      toast.error('Relay values must be positive', { position: 'top-right' })
-      return false
-    }
-
-    if (relays.every((relay) => relay === 0)) {
-      toast.error('Please fill in at least one relay value', { position: 'top-right' })
-      return false
-    }
     return true
   }
 
@@ -83,7 +67,7 @@ export function UserForm () {
     <div className="flex flex-col gap-6 max-w-lg mx-auto sm:p-0 p-4 h-[99vh] overflow-hidden">
       <Card className="shadow-lg rounded-xl border flex flex-col h-full">
         <CardHeader>
-          <CardTitle className="text-2xl font-bold text-gray-800">MQTT Scheduler</CardTitle>
+          <CardTitle className="text-2xl font-bold text-gray-800">IOT Scheduler</CardTitle>
           <CardDescription className="text-gray-600">
             Configure triggers and schedules for your devices.
           </CardDescription>
@@ -119,21 +103,12 @@ export function UserForm () {
               </div>
               {mode && (
                 <div className="grid gap-4 p-4 border rounded-lg bg-gray-50">
-                  <Label>Relay Configuration</Label>
+                  <Label>Switch Configuration</Label>
                   {[1, 2, 3, 4].map((relay, index) => (
                     <div key={relay} className="grid gap-2">
-                      <Label>Relay {relay}</Label>
-                      {(mode === 'SWITCH' || mode === 'SRS' || mode === 'SST') ? (
-                        <Input type="number" placeholder="Seconds" min="0" className="rounded-lg border-gray-300"
-                               onChange={(e) => handleChange(e, index)}/>
-                      ) : mode === 'TTR' ? (
-                        <div className="flex gap-2">
-                          <Input type="number" placeholder="Hour (24h)" min="0" max="23"
-                                 className="rounded-lg border-gray-300"/>
-                          <Input type="number" placeholder="Minute" min="0" max="59"
-                                 className="rounded-lg border-gray-300"/>
-                        </div>
-                      ) : null}
+                      <Label>Switch {relay}</Label>
+                      <Input type="number" placeholder="Seconds" min="0" className="rounded-lg border-gray-300"
+                             onChange={(e) => handleChange(e, index)}/>
                     </div>
                   ))}
                 </div>
@@ -143,6 +118,17 @@ export function UserForm () {
                   <Label htmlFor="city">City</Label>
                   <Input id="city" type="text" placeholder="Enter city name" required
                          className="rounded-lg border-gray-300" onChange={handleChange}/>
+                </div>
+              )}
+              {mode === 'TTR' && (
+                <div className="flex flex-col gap-2">
+                  <Label>Time</Label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <Input id="hh" type="number" placeholder="Hour (24h)" min="0" max="23"
+                           className="rounded-lg border-gray-300" onChange={handleChange}/>
+                    <Input id="mm" type="number" placeholder="Minute" min="0" max="59"
+                           className="rounded-lg border-gray-300" onChange={handleChange}/>
+                  </div>
                 </div>
               )}
               <Button type="submit" className="w-full rounded-lg text-white bg-blue-500 hover:bg-blue-600">
