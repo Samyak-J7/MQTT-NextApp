@@ -2,37 +2,38 @@ import { NextRequest, NextResponse } from 'next/server'
 import { MQTTFormData } from '@/app/types'
 import mqtt from 'mqtt'
 
-export async function POST (req: NextRequest) {
+export async function POST (req: NextRequest): Promise<NextResponse> {
   try {
     const body: MQTTFormData = await req.json()
-    const brokerUrl = process.env.MQTT_BROKER || ''
-    const options = {
-      username: process.env.MQTT_USERNAME,
-      password: process.env.MQTT_PASSWORD,
-    }
-    const client = mqtt.connect(brokerUrl, options)
-    const topic = process.env.MQTT_TOPIC || ''
-    const message = JSON.stringify(body)
-    if (!brokerUrl || !topic || !message || !options.username || !options.password) {
-      return NextResponse.json({ error: 'Invalid Configuration' }, { status: 500 })
-    }
-    client.publish(topic, message, { qos: 1, retain: true }, (err) => {
-        if (err) {
-          console.error(err)
-          return NextResponse.json({ error: 'Something went wrong' }, { status: 500 })
-        }
-        client.end()
-      }
-    )
+    const { MQTT_BROKER, MQTT_USERNAME, MQTT_PASSWORD, MQTT_TOPIC } = process.env
 
-    client.on('error', (err) => {
-      console.error('MQTT Error:', err)
-      client.end()
-      return NextResponse.json({ error: 'Something went wrong' }, { status: 500 })
+    if (!MQTT_BROKER || !MQTT_USERNAME || !MQTT_PASSWORD || !MQTT_TOPIC) {
+      console.error('Missing required environment variables')
+      return NextResponse.json({ error: 'Invalid server configuration' }, { status: 500 })
+    }
+
+    const options = { username: MQTT_USERNAME, password: MQTT_PASSWORD }
+    const client = mqtt.connect(MQTT_BROKER, options)
+
+    await new Promise<void>((resolve, reject) => {
+      client.on('connect', () => {
+        const message = JSON.stringify(body)
+        client.publish(MQTT_TOPIC, message, { qos: 1, retain: true }, (err) => {
+          client.end()
+          if (err) reject(err)
+          else resolve()
+        })
+      })
+
+      client.on('error', (err) => {
+        client.end()
+        reject(err)
+      })
     })
+
     return NextResponse.json({ message: 'Success' }, { status: 200 })
   } catch (error) {
-    console.error(error)
-    return NextResponse.json({ error: 'Invalid Data Format' }, { status: 400 })
+    console.error('Error:', error)
+    return NextResponse.json({ error: 'Request failed' }, { status: 500 })
   }
 }
