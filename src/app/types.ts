@@ -5,7 +5,7 @@ export enum TriggerMode {
   SST = 'Sunset',
 }
 
-export interface MQTTFormData {
+export interface FormData {
   key: string;
   devId: string;
   city: string;
@@ -13,4 +13,12 @@ export interface MQTTFormData {
   hh: number;
   mm: number;
   mode: string;
+}
+
+export interface MqttMessagePayload {
+  key: string;
+  devId: string;
+  relays: number[];
+  mode: string;
+  trig_at: string
 }

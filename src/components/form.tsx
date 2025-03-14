@@ -13,12 +13,12 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import React, { useState } from 'react'
-import { MQTTFormData, TriggerMode } from '@/app/types'
+import { FormData, MqttMessagePayload, TriggerMode } from '@/app/types'
 import { toast } from 'sonner'
 
 export function UserForm () {
   const [mode, setMode] = useState<string>(Object.keys(TriggerMode)[0])
-  const [formData, setFormData] = useState<MQTTFormData>({
+  const [formData, setFormData] = useState<FormData>({
     key: '',
     devId: '',
     city: '',
@@ -41,7 +41,7 @@ export function UserForm () {
     }
   }
 
-  const validateFormData = ({ key, devId, city, relays, hh, mm }: MQTTFormData): boolean => {
+  const validateFormData = ({ key, devId, city, relays, hh, mm }: FormData): boolean => {
     if (!mode) return toast.error('Please select a trigger mode', { position: 'top-right' }), false
     if (!key.trim() || !devId.trim()) return toast.error('Please fill in the key and device ID', { position: 'top-right' }), false
     if ((mode === 'SRS' || mode === 'SST') && !city?.trim()) return toast.error('Please fill in the city name', { position: 'top-right' }), false
@@ -55,7 +55,15 @@ export function UserForm () {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!validateFormData(formData)) return
-    const response = await fetch('/api/mqtt-message', { method: 'POST', body: JSON.stringify(formData) })
+    const trigAt = mode === 'TTR' ? `${formData.hh.toString().padStart(2, '0')}${formData.mm.toString().padStart(2, '0')}` : (mode === 'SRS' || mode === 'SST' ? formData.city : '0')
+    const messagePayload: MqttMessagePayload = {
+      key: formData.key,
+      devId: formData.devId,
+      mode: mode,
+      relays: formData.relays,
+      trig_at: trigAt,
+    }
+    const response = await fetch('/api/mqtt-message', { method: 'POST', body: JSON.stringify(messagePayload) })
     if (response.ok) {
       toast.success('Data saved successfully', { position: 'top-right' })
     } else {

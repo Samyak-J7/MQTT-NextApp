@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { MQTTFormData } from '@/app/types'
+import { MqttMessagePayload } from '@/app/types'
 import mqtt from 'mqtt'
 
 export async function POST (req: NextRequest): Promise<NextResponse> {
   try {
-    const body: MQTTFormData = await req.json()
+    const body: MqttMessagePayload = await req.json()
     const { MQTT_BROKER, MQTT_USERNAME, MQTT_PASSWORD, MQTT_TOPIC } = process.env
 
     if (!MQTT_BROKER || !MQTT_USERNAME || !MQTT_PASSWORD || !MQTT_TOPIC) {
