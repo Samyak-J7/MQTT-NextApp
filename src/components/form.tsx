@@ -12,9 +12,12 @@ import {
 } from '@/components/ui/select'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { FormData, MqttMessagePayload, TriggerMode } from '@/app/types'
 import { toast } from 'sonner'
+import { Html5QrcodeScanner } from 'html5-qrcode'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, } from '@/components/ui/dialog'
+import { ScanIcon } from 'lucide-react'
 
 export function UserForm () {
   const [mode, setMode] = useState<string>(Object.keys(TriggerMode)[0])
@@ -27,6 +30,37 @@ export function UserForm () {
     mm: 0,
     mode: '',
   })
+  const [isScannerOpen, setIsScannerOpen] = useState(false)
+  const [scanner, setScanner] = useState<Html5QrcodeScanner | null>(null)
+
+  useEffect(() => {
+    if (isScannerOpen && !scanner) {
+      setTimeout(() => {
+        const element = document.getElementById('qr-reader')
+        if (!element) {
+          console.error('qr-reader element not found!')
+          return
+        }
+
+        const newScanner = new Html5QrcodeScanner('qr-reader', {
+          fps: 10,
+          qrbox: { width: 250, height: 250 },
+        }, false)
+
+        newScanner.render(
+          (decodedText) => {
+            setFormData((prev) => ({ ...prev, devId: decodedText }))
+            setIsScannerOpen(false)
+            newScanner.clear().then(() => setScanner(null))
+          },
+          (errorMessage) => console.log(errorMessage)
+        )
+        setScanner(newScanner)
+      }, 100)
+    }
+
+    return () => {scanner?.clear()}
+  }, [isScannerOpen, scanner])
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>, index?: number) => {
     const { id, value } = e.target
@@ -53,20 +87,34 @@ export function UserForm () {
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!validateFormData(formData)) return
-    const trigAt = mode === 'TTR' ? `${formData.hh.toString().padStart(2, '0')}${formData.mm.toString().padStart(2, '0')}` : (mode === 'SRS' || mode === 'SST' ? formData.city : '0')
-    const messagePayload: MqttMessagePayload = {
-      key: formData.key,
-      devId: formData.devId,
-      mode: mode,
-      relays: formData.relays,
-      trig_at: trigAt,
-    }
-    const response = await fetch('/api/mqtt-message', { method: 'POST', body: JSON.stringify(messagePayload) })
-    if (response.ok) {
-      toast.success('Data saved successfully', { position: 'top-right' })
-    } else {
+    try {
+      e.preventDefault()
+      if (!validateFormData(formData)) return
+      const trigAt = mode === 'TTR' ? `${formData.hh.toString().padStart(2, '0')}${formData.mm.toString().padStart(2, '0')}` : (mode === 'SRS' || mode === 'SST' ? formData.city : '0')
+      const messagePayload: MqttMessagePayload = {
+        key: `*${formData.key}#`,
+        devId: formData.devId,
+        mode: mode,
+        relays: formData.relays,
+        trig_at: trigAt,
+      }
+      const response = await fetch('/api/mqtt-message', { method: 'POST', body: JSON.stringify(messagePayload) })
+      if (response.ok) {
+        toast.success('Data saved successfully', { position: 'top-right' })
+        setFormData({
+          key: '',
+          devId: '',
+          city: '',
+          relays: [0, 0, 0, 0],
+          hh: 0,
+          mm: 0,
+          mode: '',
+        })
+      } else {
+        toast.error('Failed to save data', { position: 'top-right' })
+      }
+    } catch (error) {
+      console.error('Error:', error)
       toast.error('Failed to save data', { position: 'top-right' })
     }
   }
@@ -88,10 +136,34 @@ export function UserForm () {
                 <Input id="key" type="text" placeholder="Enter the key value" required
                        className="rounded-lg border-gray-300" onChange={handleChange}/>
               </div>
-              <div className="flex flex-col gap-2">
+              <div className="relative flex flex-col gap-2">
                 <Label htmlFor="devId">Device ID</Label>
-                <Input id="devId" type="text" placeholder="Enter your device ID" required
-                       className="rounded-lg border-gray-300" onChange={handleChange}/>
+                <Input
+                  id="devId"
+                  type="text"
+                  placeholder="Enter your device ID"
+                  required
+                  className="rounded-lg border-gray-300 pr-10"
+                  value={formData.devId}
+                  onChange={handleChange}
+                />
+                <Dialog open={isScannerOpen} onOpenChange={setIsScannerOpen}>
+                  <DialogTrigger asChild>
+                    <button
+                      type="button"
+                      className="absolute right-3 top-2/3 transform -translate-y-1/2 text-gray-500 hover:text-blue-500"
+                      onClick={() => setIsScannerOpen(true)}
+                    >
+                      <ScanIcon className="w-5 h-5"/>
+                    </button>
+                  </DialogTrigger>
+                  <DialogContent className="max-w-md p-4">
+                    <DialogHeader>
+                      <DialogTitle>Scan QR Code</DialogTitle>
+                    </DialogHeader>
+                    <div id="qr-reader" className="w-full"></div>
+                  </DialogContent>
+                </Dialog>
               </div>
               <div className="flex flex-col gap-2">
                 <Label>Trigger Mode</Label>
