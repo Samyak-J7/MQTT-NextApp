@@ -1,35 +1,32 @@
 import type { Metadata } from 'next'
-import { Geist, Geist_Mono } from 'next/font/google'
 import './globals.css'
-import React from 'react'
-import { Toaster } from '@/components/ui/sonner'
-
-const geistSans = Geist({
-  variable: '--font-geist-sans',
-  subsets: ['latin'],
-})
-
-const geistMono = Geist_Mono({
-  variable: '--font-geist-mono',
-  subsets: ['latin'],
-})
+import { Toaster } from 'sonner'
+import { SessionProvider } from 'next-auth/react'
 
 export const metadata: Metadata = {
-  title: 'MQTT Scheduler',
-  description: 'Configure triggers and schedules for your devices.',
+  title: 'MQTT IoT Dashboard',
+  description: 'Monitor and manage your IoT devices',
 }
 
-export default function RootLayout ({
-  children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-    <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
-    {children}
-    <Toaster/>
-    </body>
+      <body className="bg-mesh">
+        <SessionProvider>
+          {children}
+          <Toaster
+            theme="dark"
+            position="top-right"
+            toastOptions={{
+              style: {
+                background: 'var(--bg-card)',
+                border: '1px solid var(--border-light)',
+                color: 'var(--text-primary)',
+              },
+            }}
+          />
+        </SessionProvider>
+      </body>
     </html>
   )
 }
