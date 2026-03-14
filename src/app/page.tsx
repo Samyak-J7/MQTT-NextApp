@@ -196,7 +196,9 @@ export default function HomePage() {
                 .nav-link { color: var(--text-secondary); text-decoration:none; font-size:0.875rem; font-weight:500; transition:color 0.15s; }
                 .nav-link:hover { color: var(--text-primary); }
                 @media (max-width: 768px) {
-                    .nav-links { display: none; }
+                    .nav-links { display: none !important; }
+                    .nav-cta { display: none !important; }
+                    .nav-hamburger { display: flex !important; }
                     .mobile-nav-open { display: flex !important; }
                     .hero-h1-text { font-size: 2.4rem !important; }
                     .features-grid { grid-template-columns: 1fr 1fr !important; }
@@ -236,8 +238,8 @@ export default function HomePage() {
                     <a href="#testimonials" className="nav-link">Reviews</a>
                 </div>
 
-                {/* CTA */}
-                <div style={{ display: 'flex', gap: '0.625rem', alignItems: 'center' }}>
+                {/* Desktop CTA buttons */}
+                <div className="nav-cta" style={{ display: 'flex', gap: '0.625rem', alignItems: 'center' }}>
                     {session ? (
                         <Link href="/dashboard">
                             <button className="btn-primary" style={{ padding: '0.5rem 1.1rem', fontSize: '0.85rem' }}>
@@ -254,21 +256,44 @@ export default function HomePage() {
                             </Link>
                         </>
                     )}
-                    {/* Mobile hamburger */}
-                    <button onClick={() => setMobileMenuOpen(o => !o)} style={{ background: 'none', border: '1px solid var(--border)', borderRadius: '8px', color: 'var(--text-secondary)', padding: '0.4rem', cursor: 'pointer', display: 'none' }} className="show-mobile">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
-                    </button>
                 </div>
+                {/* Mobile hamburger — always at top level so it's never hidden by parent */}
+                <button
+                    onClick={() => setMobileMenuOpen(o => !o)}
+                    className="nav-hamburger"
+                    style={{ background: 'none', border: '1px solid var(--border)', borderRadius: '8px', color: 'var(--text-secondary)', padding: '0.4rem', cursor: 'pointer', display: 'none', alignItems: 'center', justifyContent: 'center' }}
+                    aria-label="Open menu"
+                >
+                    {mobileMenuOpen
+                        ? <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                        : <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+                    }
+                </button>
             </nav>
 
             {/* Mobile menu */}
             {mobileMenuOpen && (
-                <div style={{ position: 'fixed', top: '65px', left: 0, right: 0, zIndex: 99, background: 'var(--bg-card)', borderBottom: '1px solid var(--border)', padding: '1rem 1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                <div style={{ position: 'fixed', top: '65px', left: 0, right: 0, zIndex: 99, background: 'var(--bg-card)', borderBottom: '1px solid var(--border)', padding: '1.25rem 1.5rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                     {['#features', '#how-it-works', '#pricing', '#testimonials'].map((h) => (
-                        <a key={h} href={h} onClick={() => setMobileMenuOpen(false)} style={{ color: 'var(--text-secondary)', textDecoration: 'none', fontSize: '0.9rem', fontWeight: 500 }}>
-                            {h.replace('#', '').replace('-', ' ').replace(/\b\w/g, c => c.toUpperCase())}
+                        <a key={h} href={h} onClick={() => setMobileMenuOpen(false)} style={{ color: 'var(--text-secondary)', textDecoration: 'none', fontSize: '0.9rem', fontWeight: 500, padding: '0.4rem 0' }}>
+                            {h.replace('#', '').replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
                         </a>
                     ))}
+                    {/* Auth links in mobile menu */}
+                    <div style={{ borderTop: '1px solid var(--border)', paddingTop: '0.75rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                        {session ? (
+                            <Link href="/dashboard" onClick={() => setMobileMenuOpen(false)} style={{ display: 'block' }}>
+                                <button className="btn-primary" style={{ width: '100%', justifyContent: 'center', padding: '0.65rem 1rem' }}>→ Dashboard</button>
+                            </Link>
+                        ) : (
+                            <>
+                                <Link href="/login" onClick={() => setMobileMenuOpen(false)} style={{ color: 'var(--text-secondary)', textDecoration: 'none', fontSize: '0.9rem', fontWeight: 500, padding: '0.4rem 0' }}>Sign in</Link>
+                                <Link href="/register" onClick={() => setMobileMenuOpen(false)} style={{ display: 'block' }}>
+                                    <button className="btn-primary" style={{ width: '100%', justifyContent: 'center', padding: '0.65rem 1rem' }}>Get started free</button>
+                                </Link>
+                            </>
+                        )}
+                    </div>
                 </div>
             )}
 

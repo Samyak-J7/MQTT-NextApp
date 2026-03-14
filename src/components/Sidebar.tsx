@@ -54,7 +54,7 @@ const navItems = [
     },
 ]
 
-export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => void }) {
+export function Sidebar({ collapsed, onToggle, mobile }: { collapsed: boolean; onToggle: () => void; mobile?: boolean }) {
     const pathname = usePathname()
 
     const isActive = (href: string) => {
@@ -66,7 +66,9 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
     return (
         <aside style={{
             width: collapsed ? '72px' : '240px',
-            minHeight: '100vh',
+            height: mobile ? '100%' : '100vh',
+            position: mobile ? 'relative' : 'sticky',
+            top: mobile ? undefined : 0,
             background: 'var(--bg-card)',
             borderRight: '1px solid var(--border)',
             display: 'flex',
@@ -130,7 +132,7 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
             </div>
 
             {/* Nav */}
-            <nav style={{ flex: 1, padding: '0.75rem 0.625rem', display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+            <nav style={{ flex: 1, padding: '0.75rem 0.625rem', display: 'flex', flexDirection: 'column', gap: '0.25rem', overflowY: 'auto' }}>
                 {navItems.map(item => (
                     <Link
                         key={item.href}

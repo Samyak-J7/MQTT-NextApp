@@ -21,7 +21,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                     style={{ justifyContent: 'flex-start', padding: 0 }}
                 >
                     <div onClick={e => e.stopPropagation()} style={{ height: '100%' }}>
-                        <Sidebar collapsed={false} onToggle={() => setMobileOpen(false)} />
+                        <Sidebar mobile collapsed={false} onToggle={() => setMobileOpen(false)} />
                     </div>
                 </div>
             )}
