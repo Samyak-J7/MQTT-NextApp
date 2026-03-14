@@ -14,49 +14,40 @@ interface StatsCardProps {
 
 function StatsCard({ label, value, icon, color, glow, sub }: StatsCardProps) {
     return (
-        <div className="glass-card glass-card-hover" style={{ padding: '1.25rem' }}>
-            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '1rem' }}>
-                <div style={{
-                    width: '44px', height: '44px', borderRadius: '12px',
-                    background: glow, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    color, border: `1px solid ${color}33`,
-                }}>
+        <div className="glass-card glass-card-hover p-5">
+            <div className="flex items-start justify-between mb-4">
+                <div className="w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0"
+                    style={{ background: glow, color, border: `1px solid ${color}33` }}>
                     {icon}
                 </div>
             </div>
-            <div style={{ fontSize: '2rem', fontWeight: 800, color: 'var(--text-primary)', lineHeight: 1 }}>{value}</div>
-            <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '0.375rem' }}>{label}</div>
-            {sub && <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>{sub}</div>}
+            <div className="text-[2rem] font-extrabold text-text-primary leading-none">{value}</div>
+            <div className="text-[0.8rem] text-text-secondary mt-1.5">{label}</div>
+            {sub && <div className="text-[0.72rem] text-text-muted mt-0.5">{sub}</div>}
         </div>
     )
 }
 
 function StatusRow({ device }: { device: Device }) {
     const isOnline = device.lastSeen ? Date.now() - device.lastSeen < 5 * 60 * 1000 : false
-    const last = device.lastSeen
-        ? new Date(device.lastSeen).toLocaleTimeString()
-        : 'Never'
+    const last = device.lastSeen ? new Date(device.lastSeen).toLocaleTimeString() : 'Never'
 
     return (
-        <Link href={`/dashboard/devices/${device.deviceId}`} style={{ textDecoration: 'none' }}>
-            <div className="glass-card-hover" style={{
-                display: 'flex', alignItems: 'center', gap: '1rem',
-                padding: '0.875rem 1rem', borderRadius: '10px',
-                border: '1px solid transparent', cursor: 'pointer',
-            }}>
+        <Link href={`/dashboard/devices/${device.deviceId}`} className="no-underline">
+            <div className="glass-card-hover flex items-center gap-4 px-4 py-3.5 rounded-xl border border-transparent cursor-pointer">
                 <span className={isOnline ? 'status-dot-online' : 'status-dot-offline'} />
-                <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-primary)' }}>{device.name}</div>
-                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontFamily: 'monospace' }}>{device.deviceId}</div>
+                <div className="flex-1 min-w-0">
+                    <div className="text-sm font-semibold text-text-primary truncate">{device.name}</div>
+                    <div className="text-xs text-text-muted font-mono">{device.deviceId}</div>
                 </div>
                 {device.location && (
-                    <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>📍 {device.location}</span>
+                    <span className="text-xs text-text-muted hidden sm:block">📍 {device.location}</span>
                 )}
-                <div style={{ textAlign: 'right' }}>
+                <div className="text-right flex-shrink-0">
                     <span className={isOnline ? 'badge-online' : 'badge-offline'}>
                         {isOnline ? '● Online' : '○ Offline'}
                     </span>
-                    <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>Last: {last}</div>
+                    <div className="text-[0.7rem] text-text-muted mt-1">Last: {last}</div>
                 </div>
             </div>
         </Link>
@@ -78,102 +69,97 @@ export default function DashboardPage() {
     const offline = devices.length - online
     const scheduled = devices.filter(d => (d.schedules ?? []).length > 0).length
 
+    const statCards = [
+        {
+            label: 'Total Devices', value: devices.length,
+            color: '#60a5fa', glow: 'rgba(59,130,246,0.15)',
+            sub: `${scheduled} with schedules`,
+            icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="5" y="2" width="14" height="20" rx="2" /><line x1="12" y1="18" x2="12.01" y2="18" /></svg>,
+        },
+        {
+            label: 'Online', value: online,
+            color: '#4ade80', glow: 'rgba(34,197,94,0.15)',
+            sub: 'Active right now',
+            icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12.55a11 11 0 0 1 14.08 0" /><path d="M1.42 9a16 16 0 0 1 21.16 0" /><path d="M8.53 16.11a6 6 0 0 1 6.95 0" /><line x1="12" y1="20" x2="12.01" y2="20" /></svg>,
+        },
+        {
+            label: 'Offline', value: offline,
+            color: '#f87171', glow: 'rgba(239,68,68,0.1)',
+            sub: 'Check connections',
+            icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="1" y1="1" x2="23" y2="23" /><path d="M16.72 11.06A10.94 10.94 0 0 1 19 12.55" /><path d="M5 12.55a10.94 10.94 0 0 1 5.17-2.39" /><path d="M10.71 5.05A16 16 0 0 1 22.56 9" /><path d="M1.42 9a15.91 15.91 0 0 1 4.7-2.88" /><path d="M8.53 16.11a6 6 0 0 1 6.95 0" /><line x1="12" y1="20" x2="12.01" y2="20" /></svg>,
+        },
+        {
+            label: 'Schedules', value: devices.reduce((a, d) => a + (d.schedules?.length ?? 0), 0),
+            color: '#c084fc', glow: 'rgba(139,92,246,0.15)',
+            sub: 'Automated triggers',
+            icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></svg>,
+        },
+    ]
+
+    const quickActions = [
+        { href: '/dashboard/devices', label: 'Add Device', icon: '+', color: '#3b82f6', glow: 'rgba(59,130,246,0.15)' },
+        { href: '/dashboard/schedules', label: 'New Schedule', icon: '⏱', color: '#8b5cf6', glow: 'rgba(139,92,246,0.15)' },
+        { href: '/dashboard/analytics', label: 'View Analytics', icon: '📊', color: '#06b6d4', glow: 'rgba(6,182,212,0.15)' },
+    ]
+
     return (
-        <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
+        <div className="max-w-[1200px] mx-auto">
             {/* Header */}
-            <div style={{ marginBottom: '2rem' }}>
-                <h1 style={{ fontSize: '1.75rem', fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>
-                    Overview
-                </h1>
-                <p style={{ color: 'var(--text-secondary)', marginTop: '0.25rem', fontSize: '0.9rem' }}>
+            <div className="mb-8">
+                <h1 className="text-[1.75rem] font-extrabold text-text-primary m-0">Overview</h1>
+                <p className="text-text-secondary mt-1 text-[0.9rem]">
                     {new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
                 </p>
             </div>
 
-            {/* Stats */}
-            <div style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-                gap: '1rem', marginBottom: '2rem'
-            }}>
-                <StatsCard
-                    label="Total Devices" value={devices.length}
-                    color="#60a5fa" glow="rgba(59,130,246,0.15)"
-                    sub={`${scheduled} with schedules`}
-                    icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>}
-                />
-                <StatsCard
-                    label="Online" value={online}
-                    color="#4ade80" glow="rgba(34,197,94,0.15)"
-                    sub="Active right now"
-                    icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/></svg>}
-                />
-                <StatsCard
-                    label="Offline" value={offline}
-                    color="#f87171" glow="rgba(239,68,68,0.1)"
-                    sub="Check connections"
-                    icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="1" y1="1" x2="23" y2="23"/><path d="M16.72 11.06A10.94 10.94 0 0 1 19 12.55"/><path d="M5 12.55a10.94 10.94 0 0 1 5.17-2.39"/><path d="M10.71 5.05A16 16 0 0 1 22.56 9"/><path d="M1.42 9a15.91 15.91 0 0 1 4.7-2.88"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/></svg>}
-                />
-                <StatsCard
-                    label="Schedules" value={devices.reduce((a, d) => a + (d.schedules?.length ?? 0), 0)}
-                    color="#c084fc" glow="rgba(139,92,246,0.15)"
-                    sub="Automated triggers"
-                    icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>}
-                />
+            {/* Stats grid */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+                {statCards.map(c => <StatsCard key={c.label} {...c} />)}
             </div>
 
-            {/* Device Status List */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '1.5rem' }}>
-                <div className="glass-card" style={{ padding: '1.25rem' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
-                        <h2 style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>
-                            Device Status
-                        </h2>
-                        <Link href="/dashboard/devices" style={{ color: '#60a5fa', fontSize: '0.8rem', textDecoration: 'none' }}>
+            {/* Device list + Quick actions */}
+            <div className="flex flex-col gap-6">
+                {/* Device Status */}
+                <div className="glass-card p-5">
+                    <div className="flex items-center justify-between mb-4">
+                        <h2 className="text-base font-bold text-text-primary m-0">Device Status</h2>
+                        <Link href="/dashboard/devices" className="text-[#60a5fa] text-[0.8rem] no-underline hover:underline">
                             View all →
                         </Link>
                     </div>
 
                     {loading ? (
-                        <div style={{ display: 'flex', justifyContent: 'center', padding: '2rem' }}>
+                        <div className="flex justify-center py-8">
                             <span className="spinner" />
                         </div>
                     ) : devices.length === 0 ? (
-                        <div style={{ textAlign: 'center', padding: '2.5rem', color: 'var(--text-muted)' }}>
-                            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" style={{ margin: '0 auto 1rem', display: 'block', opacity: 0.4 }} strokeLinecap="round" strokeLinejoin="round">
-                                <rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12.01" y2="18"/>
+                        <div className="text-center py-10 text-text-muted">
+                            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"
+                                className="mx-auto mb-4 opacity-40" strokeLinecap="round" strokeLinejoin="round">
+                                <rect x="5" y="2" width="14" height="20" rx="2" /><line x1="12" y1="18" x2="12.01" y2="18" />
                             </svg>
-                            <p style={{ margin: 0, fontSize: '0.9rem' }}>No devices yet.</p>
-                            <Link href="/dashboard/devices" style={{ color: '#60a5fa', fontSize: '0.85rem', marginTop: '0.5rem', display: 'block' }}>
+                            <p className="m-0 text-[0.9rem]">No devices yet.</p>
+                            <Link href="/dashboard/devices" className="text-[#60a5fa] text-[0.85rem] mt-2 block hover:underline">
                                 Add your first device →
                             </Link>
                         </div>
                     ) : (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                        <div className="flex flex-col gap-2">
                             {devices.slice(0, 8).map(d => <StatusRow key={d.deviceId} device={d} />)}
                         </div>
                     )}
                 </div>
 
                 {/* Quick Actions */}
-                <div className="glass-card" style={{ padding: '1.25rem' }}>
-                    <h2 style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--text-primary)', margin: '0 0 1rem 0' }}>
-                        Quick Actions
-                    </h2>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '0.75rem' }}>
-                        {[
-                            { href: '/dashboard/devices', label: 'Add Device', icon: '+', color: '#3b82f6', glow: 'rgba(59,130,246,0.15)' },
-                            { href: '/dashboard/schedules', label: 'New Schedule', icon: '⏱', color: '#8b5cf6', glow: 'rgba(139,92,246,0.15)' },
-                            { href: '/dashboard/analytics', label: 'View Analytics', icon: '📊', color: '#06b6d4', glow: 'rgba(6,182,212,0.15)' },
-                        ].map(a => (
-                            <Link key={a.href} href={a.href} style={{ textDecoration: 'none' }}>
-                                <div className="glass-card-hover" style={{
-                                    padding: '1rem', borderRadius: '12px', textAlign: 'center',
-                                    background: a.glow, border: `1px solid ${a.color}22`,
-                                    cursor: 'pointer',
-                                }}>
-                                    <div style={{ fontSize: '1.5rem', marginBottom: '0.5rem' }}>{a.icon}</div>
-                                    <div style={{ fontSize: '0.875rem', fontWeight: 600, color: a.color }}>{a.label}</div>
+                <div className="glass-card p-5">
+                    <h2 className="text-base font-bold text-text-primary m-0 mb-4">Quick Actions</h2>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        {quickActions.map(a => (
+                            <Link key={a.href} href={a.href} className="no-underline">
+                                <div className="glass-card-hover p-4 rounded-xl text-center cursor-pointer"
+                                    style={{ background: a.glow, border: `1px solid ${a.color}22` }}>
+                                    <div className="text-2xl mb-2">{a.icon}</div>
+                                    <div className="text-sm font-semibold" style={{ color: a.color }}>{a.label}</div>
                                 </div>
                             </Link>
                         ))}

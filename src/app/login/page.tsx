@@ -15,11 +15,7 @@ export default function LoginPage() {
         e.preventDefault()
         setLoading(true)
         try {
-            const result = await signIn('credentials', {
-                email,
-                password,
-                redirect: false,
-            })
+            const result = await signIn('credentials', { email, password, redirect: false })
             if (result?.error) {
                 toast.error('Invalid email or password')
             } else {
@@ -35,54 +31,32 @@ export default function LoginPage() {
 
     return (
         <div className="min-h-screen bg-mesh flex items-center justify-center p-4">
-            {/* Background glow orbs */}
-            <div style={{
-                position: 'fixed', inset: 0, overflow: 'hidden', pointerEvents: 'none', zIndex: 0
-            }}>
-                <div style={{
-                    position: 'absolute', top: '-10%', left: '20%',
-                    width: '500px', height: '500px', borderRadius: '50%',
-                    background: 'radial-gradient(circle, rgba(59,130,246,0.12) 0%, transparent 70%)',
-                    filter: 'blur(40px)'
-                }} />
-                <div style={{
-                    position: 'absolute', bottom: '10%', right: '15%',
-                    width: '400px', height: '400px', borderRadius: '50%',
-                    background: 'radial-gradient(circle, rgba(139,92,246,0.1) 0%, transparent 70%)',
-                    filter: 'blur(40px)'
-                }} />
+            {/* Background orbs */}
+            <div className="fixed inset-0 overflow-hidden pointer-events-none z-0">
+                <div className="absolute -top-[10%] left-[20%] w-[500px] h-[500px] rounded-full"
+                     style={{ background: 'radial-gradient(circle, rgba(59,130,246,0.12) 0%, transparent 70%)', filter: 'blur(40px)' }} />
+                <div className="absolute bottom-[10%] right-[15%] w-[400px] h-[400px] rounded-full"
+                     style={{ background: 'radial-gradient(circle, rgba(139,92,246,0.1) 0%, transparent 70%)', filter: 'blur(40px)' }} />
             </div>
 
-            <div style={{ position: 'relative', zIndex: 1, width: '100%', maxWidth: '420px' }}>
-                {/* Logo */}
-                <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
-                    <div style={{
-                        width: '56px', height: '56px',
-                        background: 'linear-gradient(135deg, #3b82f6, #8b5cf6)',
-                        borderRadius: '16px',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        margin: '0 auto 1rem',
-                        boxShadow: '0 8px 32px rgba(59,130,246,0.3)',
-                    }}>
+            <div className="relative z-10 w-full max-w-[420px]">
+                {/* Logo heading */}
+                <div className="text-center mb-8">
+                    <div className="w-14 h-14 rounded-2xl flex items-center justify-center mx-auto mb-4"
+                         style={{ background: 'linear-gradient(135deg, #3b82f6, #8b5cf6)', boxShadow: '0 8px 32px rgba(59,130,246,0.3)' }}>
                         <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M6 18v-6" /><path d="M10 18V5" /><path d="M14 18v-3" /><path d="M18 18v-8" />
+                            <path d="M6 18v-6"/><path d="M10 18V5"/><path d="M14 18v-3"/><path d="M18 18v-8"/>
                         </svg>
                     </div>
-                    <h1 className="gradient-text" style={{ fontSize: '1.75rem', fontWeight: 800, margin: 0 }}>
-                        MQTT Dashboard
-                    </h1>
-                    <p style={{ color: 'var(--text-secondary)', marginTop: '0.5rem', fontSize: '0.9rem' }}>
-                        Sign in to manage your IoT devices
-                    </p>
+                    <h1 className="gradient-text text-[1.75rem] font-extrabold m-0">MQTT Dashboard</h1>
+                    <p className="text-text-secondary mt-2 text-sm">Sign in to manage your IoT devices</p>
                 </div>
 
                 {/* Card */}
-                <div className="glass-card" style={{ padding: '2rem' }}>
-                    <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                            <label style={{ fontSize: '0.875rem', fontWeight: 500, color: 'var(--text-secondary)' }}>
-                                Email address
-                            </label>
+                <div className="glass-card p-8">
+                    <form onSubmit={handleSubmit} className="flex flex-col gap-5">
+                        <div className="flex flex-col gap-2">
+                            <label className="text-sm font-medium text-text-secondary">Email address</label>
                             <input
                                 className="input-dark"
                                 type="email"
@@ -93,10 +67,8 @@ export default function LoginPage() {
                                 autoComplete="email"
                             />
                         </div>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                            <label style={{ fontSize: '0.875rem', fontWeight: 500, color: 'var(--text-secondary)' }}>
-                                Password
-                            </label>
+                        <div className="flex flex-col gap-2">
+                            <label className="text-sm font-medium text-text-secondary">Password</label>
                             <input
                                 className="input-dark"
                                 type="password"
@@ -109,32 +81,27 @@ export default function LoginPage() {
                         </div>
                         <button
                             type="submit"
-                            className="btn-primary"
+                            className="btn-primary w-full justify-center py-3 text-[0.95rem] mt-1"
                             disabled={loading}
-                            style={{ width: '100%', justifyContent: 'center', padding: '0.75rem', fontSize: '0.95rem', marginTop: '0.25rem' }}
                         >
                             {loading ? (
                                 <>
-                                    <span className="spinner" style={{ width: '16px', height: '16px', borderWidth: '2px' }} />
+                                    <span className="spinner w-4 h-4 border-2" />
                                     Signing in...
                                 </>
                             ) : 'Sign In'}
                         </button>
                     </form>
 
-                    <div style={{
-                        marginTop: '1.5rem', paddingTop: '1.5rem',
-                        borderTop: '1px solid var(--border)',
-                        textAlign: 'center', fontSize: '0.875rem', color: 'var(--text-muted)'
-                    }}>
+                    <div className="mt-6 pt-6 border-t border-border-subtle text-center text-sm text-text-muted">
                         Don&apos;t have an account?{' '}
-                        <Link href="/register" style={{ color: '#60a5fa', fontWeight: 600, textDecoration: 'none' }}>
+                        <Link href="/register" className="text-[#60a5fa] font-semibold no-underline hover:underline">
                             Create one
                         </Link>
                     </div>
                 </div>
 
-                <p style={{ textAlign: 'center', marginTop: '1.5rem', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                <p className="text-center mt-6 text-xs text-text-muted">
                     © 2026 MQTT Dashboard. All rights reserved.
                 </p>
             </div>

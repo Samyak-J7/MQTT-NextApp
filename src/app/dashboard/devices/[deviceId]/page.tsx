@@ -39,18 +39,17 @@ function ScheduleModal({ deviceId, onClose, onAdded }: { deviceId: string; onClo
     return (
         <div className="modal-overlay" onClick={onClose}>
             <div className="modal-box" onClick={e => e.stopPropagation()}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
-                    <h3 style={{ margin: 0, color: 'var(--text-primary)', fontSize: '1.05rem', fontWeight: 700 }}>Add Schedule</h3>
-                    <button onClick={onClose} className="btn-ghost" style={{ padding: '0.3rem 0.5rem' }}>✕</button>
+                <div className="flex justify-between items-center mb-5">
+                    <h3 className="m-0 text-text-primary text-[1.05rem] font-bold">Add Schedule</h3>
+                    <button onClick={onClose} className="btn-ghost px-2 py-1">✕</button>
                 </div>
-                <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.375rem' }}>
-                        <label style={{ fontSize: '0.8rem', fontWeight: 500, color: 'var(--text-secondary)' }}>Trigger Mode</label>
+                <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+                    <div className="flex flex-col gap-1.5">
+                        <label className="text-[0.8rem] font-medium text-text-secondary">Trigger Mode</label>
                         <select
-                            className="input-dark"
+                            className="input-dark cursor-pointer"
                             value={form.mode}
                             onChange={e => setForm(f => ({ ...f, mode: e.target.value }))}
-                            style={{ cursor: 'pointer' }}
                         >
                             <option value="TTR">⏱ Time Trigger</option>
                             <option value="SWITCH">🔘 Switch</option>
@@ -59,26 +58,26 @@ function ScheduleModal({ deviceId, onClose, onAdded }: { deviceId: string; onClo
                         </select>
                     </div>
                     {form.mode === 'TTR' && (
-                        <div style={{ display: 'flex', gap: '0.75rem' }}>
-                            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '0.375rem' }}>
-                                <label style={{ fontSize: '0.8rem', fontWeight: 500, color: 'var(--text-secondary)' }}>Hour (0-23)</label>
+                        <div className="flex gap-3">
+                            <div className="flex-1 flex flex-col gap-1.5">
+                                <label className="text-[0.8rem] font-medium text-text-secondary">Hour (0-23)</label>
                                 <input className="input-dark" type="number" min="0" max="23" value={form.hh}
                                     onChange={e => setForm(f => ({ ...f, hh: e.target.value }))} />
                             </div>
-                            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '0.375rem' }}>
-                                <label style={{ fontSize: '0.8rem', fontWeight: 500, color: 'var(--text-secondary)' }}>Minute (0-59)</label>
+                            <div className="flex-1 flex flex-col gap-1.5">
+                                <label className="text-[0.8rem] font-medium text-text-secondary">Minute (0-59)</label>
                                 <input className="input-dark" type="number" min="0" max="59" value={form.mm}
                                     onChange={e => setForm(f => ({ ...f, mm: e.target.value }))} />
                             </div>
                         </div>
                     )}
                     <div>
-                        <label style={{ fontSize: '0.8rem', fontWeight: 500, color: 'var(--text-secondary)', display: 'block', marginBottom: '0.5rem' }}>Relay Values (seconds on)</label>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
+                        <label className="block text-[0.8rem] font-medium text-text-secondary mb-2">Relay Values (seconds on)</label>
+                        <div className="grid grid-cols-2 gap-2">
                             {form.relays.map((v, i) => (
                                 <div key={i}>
-                                    <label style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Relay {i + 1}</label>
-                                    <input className="input-dark" type="number" min="0" value={v} style={{ marginTop: '0.25rem' }}
+                                    <label className="text-[0.72rem] text-text-muted">Relay {i + 1}</label>
+                                    <input className="input-dark mt-1" type="number" min="0" value={v}
                                         onChange={e => setForm(f => {
                                             const r = [...f.relays]; r[i] = e.target.value; return { ...f, relays: r }
                                         })} />
@@ -86,9 +85,9 @@ function ScheduleModal({ deviceId, onClose, onAdded }: { deviceId: string; onClo
                             ))}
                         </div>
                     </div>
-                    <div style={{ display: 'flex', gap: '0.75rem', marginTop: '0.25rem' }}>
-                        <button type="button" onClick={onClose} className="btn-ghost" style={{ flex: 1, justifyContent: 'center' }}>Cancel</button>
-                        <button type="submit" className="btn-primary" disabled={loading} style={{ flex: 1, justifyContent: 'center' }}>
+                    <div className="flex gap-3 mt-1">
+                        <button type="button" onClick={onClose} className="btn-ghost flex-1 justify-center">Cancel</button>
+                        <button type="submit" className="btn-primary flex-1 justify-center" disabled={loading}>
                             {loading ? 'Adding...' : 'Add Schedule'}
                         </button>
                     </div>
@@ -98,25 +97,16 @@ function ScheduleModal({ deviceId, onClose, onAdded }: { deviceId: string; onClo
     )
 }
 
-function formatTime(ts: number) {
-    return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-}
-function formatDate(ts: number) {
-    return new Date(ts).toLocaleDateString([], { month: 'short', day: 'numeric' })
-}
+function formatTime(ts: number) { return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }
+function formatDate(ts: number) { return new Date(ts).toLocaleDateString([], { month: 'short', day: 'numeric' }) }
 
 const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?: Array<{ value: number; name: string }>; label?: string }) => {
     if (active && payload?.length) {
         return (
-            <div style={{
-                background: 'var(--bg-card)', border: '1px solid var(--border-light)',
-                borderRadius: '10px', padding: '0.75rem 1rem', fontSize: '0.82rem',
-            }}>
-                <p style={{ color: 'var(--text-muted)', margin: '0 0 0.375rem' }}>{label}</p>
+            <div className="bg-card border border-border-light rounded-xl px-4 py-3 text-[0.82rem]">
+                <p className="text-text-muted m-0 mb-1.5">{label}</p>
                 {payload.map((p, i) => (
-                    <p key={i} style={{ color: '#60a5fa', margin: 0, fontWeight: 600 }}>
-                        {p.name}: {p.value}
-                    </p>
+                    <p key={i} className="text-[#60a5fa] m-0 font-semibold">{p.name}: {p.value}</p>
                 ))}
             </div>
         )
@@ -134,9 +124,7 @@ export default function DeviceDetailPage() {
     const [showSchedule, setShowSchedule] = useState(false)
 
     const loadDevice = useCallback(() => {
-        fetch(`/api/devices/${deviceId}`)
-            .then(r => r.json())
-            .then(d => setDevice(d.device ?? null))
+        fetch(`/api/devices/${deviceId}`).then(r => r.json()).then(d => setDevice(d.device ?? null))
     }, [deviceId])
 
     const loadReadings = useCallback(() => {
@@ -162,9 +150,9 @@ export default function DeviceDetailPage() {
 
     if (!device && !loading) {
         return (
-            <div style={{ textAlign: 'center', padding: '4rem', color: 'var(--text-muted)' }}>
+            <div className="text-center py-16 text-text-muted">
                 <p>Device not found.</p>
-                <button onClick={() => router.back()} className="btn-ghost" style={{ marginTop: '1rem' }}>← Go back</button>
+                <button onClick={() => router.back()} className="btn-ghost mt-4">← Go back</button>
             </div>
         )
     }
@@ -173,12 +161,9 @@ export default function DeviceDetailPage() {
 
     const chartData = readings.map(r => ({
         time: range === '30d' ? formatDate(r.timestamp) : formatTime(r.timestamp),
-        volume: r.volume,
-        temperature: r.temperature,
-        humidity: r.humidity,
+        volume: r.volume, temperature: r.temperature, humidity: r.humidity,
     }))
 
-    // Generate mock data if no readings
     const displayData = chartData.length > 0 ? chartData : Array.from({ length: 24 }, (_, i) => ({
         time: `${i}:00`,
         volume: Math.floor(Math.random() * 80 + 20),
@@ -186,73 +171,68 @@ export default function DeviceDetailPage() {
         humidity: Math.floor(Math.random() * 20 + 50),
     }))
 
+    const metaItems = [
+        { label: 'Total Readings', value: readings.length || '—' },
+        { label: 'Last Seen', value: device?.lastSeen ? new Date(device.lastSeen).toLocaleString() : 'Never' },
+        { label: 'Schedules', value: (device?.schedules ?? []).length },
+        { label: 'Added', value: device?.createdAt ? new Date(device.createdAt).toLocaleDateString() : '—' },
+    ]
+
     return (
-        <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
+        <div className="max-w-[1200px] mx-auto">
             {/* Back */}
-            <button onClick={() => router.back()} className="btn-ghost" style={{ marginBottom: '1.25rem', fontSize: '0.85rem' }}>
+            <button onClick={() => router.back()} className="btn-ghost mb-5 text-[0.85rem]">
                 ← Back to Devices
             </button>
 
-            {/* Header */}
-            <div className="glass-card" style={{ padding: '1.5rem', marginBottom: '1.5rem' }}>
-                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                        <div style={{
-                            width: '56px', height: '56px', borderRadius: '16px',
-                            background: 'linear-gradient(135deg, rgba(59,130,246,0.2), rgba(139,92,246,0.2))',
-                            border: '1px solid rgba(59,130,246,0.3)',
-                            display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#60a5fa',
-                        }}>
+            {/* Header card */}
+            <div className="glass-card p-6 mb-6">
+                <div className="flex items-start justify-between flex-wrap gap-4">
+                    <div className="flex items-center gap-4">
+                        <div className="w-14 h-14 rounded-2xl flex items-center justify-center text-[#60a5fa]"
+                             style={{ background: 'linear-gradient(135deg, rgba(59,130,246,0.2), rgba(139,92,246,0.2))', border: '1px solid rgba(59,130,246,0.3)' }}>
                             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                 <rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12.01" y2="18"/>
                             </svg>
                         </div>
                         <div>
-                            <h1 style={{ fontSize: '1.4rem', fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>
+                            <h1 className="text-[1.4rem] font-extrabold text-text-primary m-0">
                                 {device?.name ?? 'Loading...'}
                             </h1>
-                            <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', margin: '0.2rem 0 0', fontFamily: 'monospace' }}>
-                                {deviceId}
-                            </p>
+                            <p className="text-text-muted text-[0.8rem] m-0 mt-0.5 font-mono">{deviceId}</p>
                         </div>
                     </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                    <div className="flex items-center gap-3">
                         <span className={isOnline ? 'badge-online' : 'badge-offline'}>
                             {isOnline ? '● Online' : '○ Offline'}
                         </span>
                         {device?.location && (
-                            <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>📍 {device.location}</span>
+                            <span className="text-[0.8rem] text-text-secondary">📍 {device.location}</span>
                         )}
                     </div>
                 </div>
 
                 {/* Meta row */}
-                <div style={{ display: 'flex', gap: '2rem', marginTop: '1.25rem', flexWrap: 'wrap' }}>
-                    {[
-                        { label: 'Total Readings', value: readings.length || '—' },
-                        { label: 'Last Seen', value: device?.lastSeen ? new Date(device.lastSeen).toLocaleString() : 'Never' },
-                        { label: 'Schedules', value: (device?.schedules ?? []).length },
-                        { label: 'Added', value: device?.createdAt ? new Date(device.createdAt).toLocaleDateString() : '—' },
-                    ].map(m => (
+                <div className="flex gap-8 mt-5 flex-wrap">
+                    {metaItems.map(m => (
                         <div key={m.label}>
-                            <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{m.label}</div>
-                            <div style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--text-secondary)', marginTop: '0.2rem' }}>{m.value}</div>
+                            <div className="text-[0.72rem] text-text-muted uppercase tracking-wider">{m.label}</div>
+                            <div className="text-[0.9rem] font-semibold text-text-secondary mt-0.5">{m.value}</div>
                         </div>
                     ))}
                 </div>
             </div>
 
             {/* Charts */}
-            <div className="glass-card" style={{ padding: '1.25rem', marginBottom: '1.5rem' }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.25rem', flexWrap: 'wrap', gap: '0.75rem' }}>
-                    <h2 style={{ margin: 0, fontSize: '1rem', fontWeight: 700, color: 'var(--text-primary)' }}>Sensor Readings</h2>
-                    <div style={{ display: 'flex', gap: '0.375rem' }}>
+            <div className="glass-card p-5 mb-6">
+                <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
+                    <h2 className="m-0 text-base font-bold text-text-primary">Sensor Readings</h2>
+                    <div className="flex gap-1.5">
                         {(['24h', '7d', '30d'] as Range[]).map(r => (
                             <button
                                 key={r}
                                 onClick={() => setRange(r)}
-                                className={range === r ? 'btn-primary' : 'btn-ghost'}
-                                style={{ padding: '0.3rem 0.875rem', fontSize: '0.8rem' }}
+                                className={`${range === r ? 'btn-primary' : 'btn-ghost'} px-3.5 py-1.5 text-[0.8rem]`}
                             >
                                 {r}
                             </button>
@@ -260,15 +240,15 @@ export default function DeviceDetailPage() {
                     </div>
                 </div>
 
-                <div style={{ marginBottom: '0.5rem' }}>
-                    <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: '0 0 1rem' }}>
+                <div>
+                    <p className="text-xs text-text-muted m-0 mb-4">
                         Volume/Flow — {range} window{chartData.length === 0 ? ' (simulated data)' : ''}
                     </p>
                     <ResponsiveContainer width="100%" height={220}>
                         <AreaChart data={displayData} margin={{ top: 5, right: 10, left: -20, bottom: 0 }}>
                             <defs>
                                 <linearGradient id="volumeGrad" x1="0" y1="0" x2="0" y2="1">
-                                    <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3} />
+                                    <stop offset="5%"  stopColor="#3b82f6" stopOpacity={0.3} />
                                     <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
                                 </linearGradient>
                             </defs>
@@ -282,16 +262,16 @@ export default function DeviceDetailPage() {
                 </div>
 
                 {displayData[0]?.temperature !== undefined && (
-                    <div style={{ marginTop: '1.25rem' }}>
-                        <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: '0 0 0.75rem' }}>Temperature & Humidity</p>
+                    <div className="mt-5">
+                        <p className="text-xs text-text-muted m-0 mb-3">Temperature &amp; Humidity</p>
                         <ResponsiveContainer width="100%" height={160}>
                             <LineChart data={displayData} margin={{ top: 5, right: 10, left: -20, bottom: 0 }}>
                                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
                                 <XAxis dataKey="time" tick={{ fill: 'var(--text-muted)', fontSize: 11 }} axisLine={false} tickLine={false} />
                                 <YAxis tick={{ fill: 'var(--text-muted)', fontSize: 11 }} axisLine={false} tickLine={false} />
                                 <Tooltip content={<CustomTooltip />} />
-                                <Line type="monotone" dataKey="temperature" name="Temp °C" stroke="#f59e0b" strokeWidth={2} dot={false} />
-                                <Line type="monotone" dataKey="humidity" name="Humidity %" stroke="#06b6d4" strokeWidth={2} dot={false} />
+                                <Line type="monotone" dataKey="temperature" name="Temp °C"   stroke="#f59e0b" strokeWidth={2} dot={false} />
+                                <Line type="monotone" dataKey="humidity"    name="Humidity %" stroke="#06b6d4" strokeWidth={2} dot={false} />
                             </LineChart>
                         </ResponsiveContainer>
                     </div>
@@ -299,42 +279,33 @@ export default function DeviceDetailPage() {
             </div>
 
             {/* Schedules */}
-            <div className="glass-card" style={{ padding: '1.25rem' }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
-                    <h2 style={{ margin: 0, fontSize: '1rem', fontWeight: 700, color: 'var(--text-primary)' }}>Schedules</h2>
-                    <button onClick={() => setShowSchedule(true)} className="btn-primary" style={{ padding: '0.4rem 0.875rem', fontSize: '0.82rem' }}>
+            <div className="glass-card p-5">
+                <div className="flex items-center justify-between mb-4">
+                    <h2 className="m-0 text-base font-bold text-text-primary">Schedules</h2>
+                    <button onClick={() => setShowSchedule(true)} className="btn-primary px-3.5 py-1.5 text-[0.82rem]">
                         + Add Schedule
                     </button>
                 </div>
 
                 {(device?.schedules ?? []).length === 0 ? (
-                    <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)', fontSize: '0.875rem' }}>
+                    <div className="text-center py-8 text-text-muted text-sm">
                         No schedules configured yet.
                     </div>
                 ) : (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                    <div className="flex flex-col gap-2">
                         {device!.schedules!.map(s => (
-                            <div key={s.scheduleId} className="glass-card-hover" style={{
-                                display: 'flex', alignItems: 'center', gap: '1rem',
-                                padding: '0.875rem 1rem', borderRadius: '10px',
-                                border: '1px solid var(--border)',
-                            }}>
-                                <div style={{
-                                    width: '36px', height: '36px', borderRadius: '10px',
-                                    background: 'rgba(139,92,246,0.15)', border: '1px solid rgba(139,92,246,0.25)',
-                                    display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1rem',
-                                }}>
+                            <div key={s.scheduleId} className="glass-card-hover flex items-center gap-4 px-4 py-3.5 rounded-xl border border-border-subtle">
+                                <div className="w-9 h-9 rounded-xl flex items-center justify-center text-base"
+                                     style={{ background: 'rgba(139,92,246,0.15)', border: '1px solid rgba(139,92,246,0.25)' }}>
                                     {s.mode === 'TTR' ? '⏱' : s.mode === 'SRS' ? '🌅' : s.mode === 'SST' ? '🌇' : '🔘'}
                                 </div>
-                                <div style={{ flex: 1 }}>
-                                    <div style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-primary)' }}>
+                                <div className="flex-1">
+                                    <div className="text-sm font-semibold text-text-primary">
                                         {s.mode === 'TTR' ? `${s.trigAt?.slice(0,2)}:${s.trigAt?.slice(2,4)}` : s.mode}
                                     </div>
-                                    <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-                                        Relays: [{s.relays.join(', ')}]
-                                    </div>
+                                    <div className="text-[0.72rem] text-text-muted">Relays: [{s.relays.join(', ')}]</div>
                                 </div>
-                                <button onClick={() => deleteSchedule(s.scheduleId)} className="btn-danger" style={{ padding: '0.3rem 0.6rem', fontSize: '0.75rem' }}>
+                                <button onClick={() => deleteSchedule(s.scheduleId)} className="btn-danger px-2.5 py-1 text-xs">
                                     Remove
                                 </button>
                             </div>

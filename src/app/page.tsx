@@ -32,14 +32,12 @@ function useInView(threshold = 0.2) {
     return { ref, inView }
 }
 
-/* ─── Reusable components ───────────────────────────────────── */
+/* ─── Feature Card ───────────────────────────────────────────── */
 function FeatureCard({ icon, title, desc, color, glow }: { icon: string; title: string; desc: string; color: string; glow: string }) {
     return (
-        <div style={{
-            background: 'rgba(17,24,39,0.7)', border: '1px solid var(--border)',
-            borderRadius: '20px', padding: '1.75rem',
-            transition: 'all 0.3s ease', cursor: 'default',
-        }}
+        <div
+            className="rounded-[20px] p-7 transition-all duration-300 cursor-default border border-border-subtle"
+            style={{ background: 'rgba(17,24,39,0.7)' }}
             onMouseEnter={e => {
                 const t = e.currentTarget
                 t.style.transform = 'translateY(-4px)'
@@ -53,64 +51,56 @@ function FeatureCard({ icon, title, desc, color, glow }: { icon: string; title: 
                 t.style.boxShadow = 'none'
             }}
         >
-            <div style={{
-                width: '52px', height: '52px', borderRadius: '14px',
-                background: glow, border: `1px solid ${color}33`,
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: '1.4rem', marginBottom: '1rem',
-            }}>{icon}</div>
-            <h3 style={{ fontSize: '1.05rem', fontWeight: 700, color: 'var(--text-primary)', margin: '0 0 0.5rem' }}>{title}</h3>
-            <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', margin: 0, lineHeight: 1.65 }}>{desc}</p>
+            <div className="w-13 h-13 rounded-2xl flex items-center justify-center text-2xl mb-4"
+                 style={{ background: glow, border: `1px solid ${color}33`, width: '52px', height: '52px' }}>
+                {icon}
+            </div>
+            <h3 className="text-[1.05rem] font-bold text-text-primary m-0 mb-2">{title}</h3>
+            <p className="text-sm text-text-secondary m-0 leading-relaxed">{desc}</p>
         </div>
     )
 }
 
+/* ─── Pricing Card ───────────────────────────────────────────── */
 function PricingCard({ name, price, period, desc, features, cta, highlight, color }: {
     name: string; price: string; period: string; desc: string;
     features: string[]; cta: string; highlight: boolean; color: string
 }) {
     return (
-        <div style={{
-            background: highlight ? `linear-gradient(160deg, rgba(59,130,246,0.12), rgba(139,92,246,0.12))` : 'rgba(17,24,39,0.7)',
-            border: highlight ? `1px solid rgba(59,130,246,0.4)` : '1px solid var(--border)',
-            borderRadius: '24px', padding: '2rem',
-            position: 'relative', overflow: 'hidden',
-            transform: highlight ? 'scale(1.03)' : 'none',
-            boxShadow: highlight ? '0 24px 64px rgba(59,130,246,0.2)' : 'none',
-        }}>
+        <div className="rounded-3xl p-8 relative overflow-hidden"
+             style={{
+                 background: highlight ? 'linear-gradient(160deg, rgba(59,130,246,0.12), rgba(139,92,246,0.12))' : 'rgba(17,24,39,0.7)',
+                 border: highlight ? '1px solid rgba(59,130,246,0.4)' : '1px solid var(--border)',
+                 transform: highlight ? 'scale(1.03)' : 'none',
+                 boxShadow: highlight ? '0 24px 64px rgba(59,130,246,0.2)' : 'none',
+             }}>
             {highlight && (
-                <div style={{
-                    position: 'absolute', top: '1rem', right: '1rem',
-                    background: 'linear-gradient(135deg,#3b82f6,#8b5cf6)',
-                    borderRadius: '20px', padding: '0.25rem 0.75rem',
-                    fontSize: '0.72rem', fontWeight: 700, color: 'white', letterSpacing: '0.05em',
-                }}>POPULAR</div>
-            )}
-            <div style={{ marginBottom: '1.5rem' }}>
-                <div style={{ fontSize: '0.85rem', fontWeight: 600, color, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '0.5rem' }}>{name}</div>
-                <div style={{ display: 'flex', alignItems: 'flex-end', gap: '0.25rem', marginBottom: '0.5rem' }}>
-                    <span style={{ fontSize: '2.75rem', fontWeight: 900, color: 'var(--text-primary)', lineHeight: 1 }}>{price}</span>
-                    {period && <span style={{ fontSize: '0.875rem', color: 'var(--text-muted)', marginBottom: '0.4rem' }}>{period}</span>}
+                <div className="absolute top-4 right-4 rounded-2xl px-3 py-1 text-[0.72rem] font-bold text-white tracking-widest uppercase"
+                     style={{ background: 'linear-gradient(135deg,#3b82f6,#8b5cf6)' }}>
+                    POPULAR
                 </div>
-                <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', margin: 0 }}>{desc}</p>
+            )}
+            <div className="mb-6">
+                <div className="text-[0.85rem] font-semibold uppercase tracking-wider mb-2" style={{ color }}>{name}</div>
+                <div className="flex items-end gap-1 mb-2">
+                    <span className="text-[2.75rem] font-black text-text-primary leading-none">{price}</span>
+                    {period && <span className="text-sm text-text-muted mb-1.5">{period}</span>}
+                </div>
+                <p className="text-[0.85rem] text-text-secondary m-0">{desc}</p>
             </div>
-            <Link href="/register" style={{ textDecoration: 'none', display: 'block', marginBottom: '1.5rem' }}>
-                <button style={{
-                    width: '100%', padding: '0.75rem',
-                    background: highlight ? 'linear-gradient(135deg,#3b82f6,#8b5cf6)' : 'transparent',
-                    border: highlight ? 'none' : '1px solid var(--border-light)',
-                    borderRadius: '12px', color: 'white', fontWeight: 700, fontSize: '0.9rem',
-                    cursor: 'pointer', transition: 'all 0.2s',
-                    fontFamily: 'inherit',
-                }}
-                    onMouseEnter={e => { e.currentTarget.style.opacity = '0.85'; e.currentTarget.style.transform = 'translateY(-1px)' }}
-                    onMouseLeave={e => { e.currentTarget.style.opacity = '1'; e.currentTarget.style.transform = 'none' }}
-                >{cta}</button>
+            <Link href="/register" className="no-underline block mb-6">
+                <button className="w-full py-3 rounded-xl text-white font-bold text-[0.9rem] cursor-pointer transition-all duration-200 hover:opacity-85 hover:-translate-y-px"
+                        style={{
+                            background: highlight ? 'linear-gradient(135deg,#3b82f6,#8b5cf6)' : 'transparent',
+                            border: highlight ? 'none' : '1px solid var(--border-light)',
+                        }}>
+                    {cta}
+                </button>
             </Link>
-            <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: '0.625rem' }}>
+            <ul className="list-none m-0 p-0 flex flex-col gap-2.5">
                 {features.map((f, i) => (
-                    <li key={i} style={{ display: 'flex', gap: '0.625rem', alignItems: 'flex-start', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
-                        <span style={{ color: '#4ade80', flexShrink: 0, marginTop: '0.05rem' }}>✓</span>
+                    <li key={i} className="flex gap-2.5 items-start text-[0.85rem] text-text-secondary">
+                        <span className="text-[#4ade80] flex-shrink-0 mt-[0.05rem]">✓</span>
                         {f}
                     </li>
                 ))}
@@ -125,9 +115,9 @@ export default function HomePage() {
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
     const statsRef = useInView()
     const d1 = useCounter(12400, 1800, statsRef.inView)
-    const d2 = useCounter(99, 1500, statsRef.inView)
-    const d3 = useCounter(340, 1600, statsRef.inView)
-    const d4 = useCounter(4, 1200, statsRef.inView)
+    const d2 = useCounter(99,    1500, statsRef.inView)
+    const d3 = useCounter(340,   1600, statsRef.inView)
+    const d4 = useCounter(4,     1200, statsRef.inView)
 
     const features = [
         { icon: '📡', title: 'Real-Time Monitoring', desc: 'Watch your devices live with automatic online/offline detection. Get instant status updates without refresh.', color: '#60a5fa', glow: 'rgba(59,130,246,0.12)' },
@@ -141,27 +131,21 @@ export default function HomePage() {
     ]
 
     const pricing = [
-        {
-            name: 'Starter', price: 'Free', period: '', desc: 'For hobbyists and personal projects.',
-            features: ['Up to 3 devices', '7-day data history', 'Basic charts', '2 schedules per device', 'Community support'],
-            cta: 'Get Started Free', highlight: false, color: '#60a5fa',
-        },
-        {
-            name: 'Pro', price: '$19', period: '/mo', desc: 'For professionals and small teams.',
-            features: ['Unlimited devices', '90-day data history', 'Advanced analytics', 'Unlimited schedules', 'Email alerts & webhooks', 'Priority support', 'CSV data export'],
-            cta: 'Start Free Trial', highlight: true, color: '#3b82f6',
-        },
-        {
-            name: 'Enterprise', price: '$79', period: '/mo', desc: 'For teams with mission-critical IoT fleets.',
-            features: ['Everything in Pro', '1-year data retention', 'Custom MQTT broker', 'Team accounts (up to 20)', 'SSO / SAML support', 'SLA 99.9% uptime', 'Dedicated account manager'],
-            cta: 'Contact Sales', highlight: false, color: '#c084fc',
-        },
+        { name: 'Starter', price: 'Free', period: '', desc: 'For hobbyists and personal projects.',
+          features: ['Up to 3 devices', '7-day data history', 'Basic charts', '2 schedules per device', 'Community support'],
+          cta: 'Get Started Free', highlight: false, color: '#60a5fa' },
+        { name: 'Pro', price: '$19', period: '/mo', desc: 'For professionals and small teams.',
+          features: ['Unlimited devices', '90-day data history', 'Advanced analytics', 'Unlimited schedules', 'Email alerts & webhooks', 'Priority support', 'CSV data export'],
+          cta: 'Start Free Trial', highlight: true, color: '#3b82f6' },
+        { name: 'Enterprise', price: '$79', period: '/mo', desc: 'For teams with mission-critical IoT fleets.',
+          features: ['Everything in Pro', '1-year data retention', 'Custom MQTT broker', 'Team accounts (up to 20)', 'SSO / SAML support', 'SLA 99.9% uptime', 'Dedicated account manager'],
+          cta: 'Contact Sales', highlight: false, color: '#c084fc' },
     ]
 
     const testimonials = [
-        { name: 'Rahul Mehta', role: 'CTO @ SmartFarm India', avatar: '🧑‍💼', text: 'We replaced a clunky custom dashboard with MQTT Hub in one weekend. The scheduling features alone saved us 30 hours a month of manual relay work.' },
-        { name: 'Priya Nair', role: 'IoT Engineer @ BuildTech', avatar: '👩‍💻', text: 'The real-time online/offline detection is incredibly accurate. The analytics helped us spot a faulty sensor in our warehouse network within hours.' },
-        { name: 'Daniel Kim', role: 'Maker & Instructor', avatar: '👨‍🏫', text: 'I use MQTT Hub to manage 15 ESP32 projects for my workshops. My students can see live data the moment they flash their boards. Absolutely love it.' },
+        { name: 'Rahul Mehta',  role: 'CTO @ SmartFarm India', avatar: '🧑‍💼', text: 'We replaced a clunky custom dashboard with MQTT Hub in one weekend. The scheduling features alone saved us 30 hours a month of manual relay work.' },
+        { name: 'Priya Nair',   role: 'IoT Engineer @ BuildTech', avatar: '👩‍💻', text: 'The real-time online/offline detection is incredibly accurate. The analytics helped us spot a faulty sensor in our warehouse network within hours.' },
+        { name: 'Daniel Kim',   role: 'Maker & Instructor', avatar: '👨‍🏫', text: 'I use MQTT Hub to manage 15 ESP32 projects for my workshops. My students can see live data the moment they flash their boards. Absolutely love it.' },
     ]
 
     const steps = [
@@ -170,98 +154,68 @@ export default function HomePage() {
         { n: '03', title: 'Monitor & Automate', desc: 'Set schedules, view charts, and react to your device data — all from one beautiful dashboard.' },
     ]
 
-    return (
-        <div style={{ minHeight: '100vh', fontFamily: 'Inter, system-ui, sans-serif', background: 'var(--bg-primary)' }}>
+    const navLinks = [
+        { href: '#features', label: 'Features' },
+        { href: '#how-it-works', label: 'How it works' },
+        { href: '#pricing', label: 'Pricing' },
+        { href: '#testimonials', label: 'Reviews' },
+    ]
 
-            {/* ── Animated background orbs ── */}
-            <div style={{ position: 'fixed', inset: 0, pointerEvents: 'none', zIndex: 0, overflow: 'hidden' }}>
-                <div style={{ position: 'absolute', top: '-5%', left: '15%', width: '700px', height: '700px', borderRadius: '50%', background: 'radial-gradient(circle, rgba(59,130,246,0.09) 0%, transparent 70%)', filter: 'blur(60px)', animation: 'drift1 20s ease-in-out infinite alternate' }} />
-                <div style={{ position: 'absolute', top: '30%', right: '5%', width: '500px', height: '500px', borderRadius: '50%', background: 'radial-gradient(circle, rgba(139,92,246,0.08) 0%, transparent 70%)', filter: 'blur(60px)', animation: 'drift2 25s ease-in-out infinite alternate' }} />
-                <div style={{ position: 'absolute', bottom: '10%', left: '30%', width: '600px', height: '400px', borderRadius: '50%', background: 'radial-gradient(circle, rgba(6,182,212,0.06) 0%, transparent 70%)', filter: 'blur(60px)', animation: 'drift3 18s ease-in-out infinite alternate' }} />
+    const mobileNavLinks = ['#features', '#how-it-works', '#pricing', '#testimonials']
+
+    return (
+        <div className="min-h-screen font-sans bg-surface">
+            {/* Animated background orbs */}
+            <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
+                <div className="absolute rounded-full animate-drift1"
+                     style={{ top: '-5%', left: '15%', width: '700px', height: '700px', background: 'radial-gradient(circle, rgba(59,130,246,0.09) 0%, transparent 70%)', filter: 'blur(60px)' }} />
+                <div className="absolute rounded-full animate-drift2"
+                     style={{ top: '30%', right: '5%', width: '500px', height: '500px', background: 'radial-gradient(circle, rgba(139,92,246,0.08) 0%, transparent 70%)', filter: 'blur(60px)' }} />
+                <div className="absolute rounded-full animate-drift3"
+                     style={{ bottom: '10%', left: '30%', width: '600px', height: '400px', background: 'radial-gradient(circle, rgba(6,182,212,0.06) 0%, transparent 70%)', filter: 'blur(60px)' }} />
             </div>
 
-            <style>{`
-                @keyframes drift1 { from { transform: translate(0,0) scale(1); } to { transform: translate(40px,60px) scale(1.1); } }
-                @keyframes drift2 { from { transform: translate(0,0) scale(1); } to { transform: translate(-50px,30px) scale(1.05); } }
-                @keyframes drift3 { from { transform: translate(0,0) scale(1); } to { transform: translate(30px,-40px) scale(1.08); } }
-                @keyframes floatUp { from { opacity:0; transform:translateY(30px); } to { opacity:1; transform:translateY(0); } }
-                @keyframes shimmer { 0%,100% { opacity:1; } 50% { opacity:0.6; } }
-                @keyframes spin-slow { to { transform: rotate(360deg); } }
-                @keyframes bar-grow { from { height: 0; } }
-                .hero-tag { animation: floatUp 0.7s ease forwards; }
-                .hero-h1 { animation: floatUp 0.7s 0.1s ease both; }
-                .hero-sub { animation: floatUp 0.7s 0.2s ease both; }
-                .hero-cta { animation: floatUp 0.7s 0.3s ease both; }
-                .hero-card { animation: floatUp 0.8s 0.4s ease both; }
-                .nav-link { color: var(--text-secondary); text-decoration:none; font-size:0.875rem; font-weight:500; transition:color 0.15s; }
-                .nav-link:hover { color: var(--text-primary); }
-                @media (max-width: 768px) {
-                    .nav-links { display: none !important; }
-                    .nav-cta { display: none !important; }
-                    .nav-hamburger { display: flex !important; }
-                    .mobile-nav-open { display: flex !important; }
-                    .hero-h1-text { font-size: 2.4rem !important; }
-                    .features-grid { grid-template-columns: 1fr 1fr !important; }
-                    .pricing-grid { grid-template-columns: 1fr !important; }
-                    .steps-grid { grid-template-columns: 1fr !important; }
-                    .testi-grid { grid-template-columns: 1fr !important; }
-                    .stats-grid { grid-template-columns: 1fr 1fr !important; }
-                }
-                @media (max-width: 480px) {
-                    .features-grid { grid-template-columns: 1fr !important; }
-                    .hero-h1-text { font-size: 1.9rem !important; }
-                    .stats-grid { grid-template-columns: 1fr !important; }
-                }
-            `}</style>
-
             {/* ── Navbar ── */}
-            <nav style={{
-                position: 'sticky', top: 0, zIndex: 100,
-                background: 'rgba(10,15,30,0.85)', backdropFilter: 'blur(20px)',
-                borderBottom: '1px solid rgba(255,255,255,0.06)',
-                padding: '0 1.5rem', height: '65px',
-                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-            }}>
+            <nav className="sticky top-0 z-[100] h-[65px] flex items-center justify-between px-6 border-b"
+                 style={{ background: 'rgba(10,15,30,0.85)', backdropFilter: 'blur(20px)', borderColor: 'rgba(255,255,255,0.06)' }}>
                 {/* Logo */}
-                <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: '0.625rem', textDecoration: 'none' }}>
-                    <div style={{ width: '34px', height: '34px', background: 'linear-gradient(135deg,#3b82f6,#8b5cf6)', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 14px rgba(59,130,246,0.35)' }}>
-                        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M6 18v-6"/><path d="M10 18V5"/><path d="M14 18v-3"/><path d="M18 18v-8"/></svg>
+                <Link href="/" className="flex items-center gap-2.5 no-underline">
+                    <div className="w-[34px] h-[34px] rounded-[10px] flex items-center justify-center"
+                         style={{ background: 'linear-gradient(135deg,#3b82f6,#8b5cf6)', boxShadow: '0 4px 14px rgba(59,130,246,0.35)' }}>
+                        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M6 18v-6"/><path d="M10 18V5"/><path d="M14 18v-3"/><path d="M18 18v-8"/>
+                        </svg>
                     </div>
-                    <span style={{ fontWeight: 800, fontSize: '1rem', color: 'var(--text-primary)' }}>MQTT<span style={{ color: '#60a5fa' }}>Hub</span></span>
+                    <span className="font-extrabold text-base text-text-primary">MQTT<span className="text-[#60a5fa]">Hub</span></span>
                 </Link>
 
                 {/* Desktop nav links */}
-                <div className="nav-links" style={{ display: 'flex', alignItems: 'center', gap: '2rem' }}>
-                    <a href="#features" className="nav-link">Features</a>
-                    <a href="#how-it-works" className="nav-link">How it works</a>
-                    <a href="#pricing" className="nav-link">Pricing</a>
-                    <a href="#testimonials" className="nav-link">Reviews</a>
+                <div className="hidden md:flex items-center gap-8">
+                    {navLinks.map(l => (
+                        <a key={l.href} href={l.href} className="nav-link">{l.label}</a>
+                    ))}
                 </div>
 
-                {/* Desktop CTA buttons */}
-                <div className="nav-cta" style={{ display: 'flex', gap: '0.625rem', alignItems: 'center' }}>
+                {/* Desktop CTA */}
+                <div className="hidden md:flex gap-2.5 items-center">
                     {session ? (
                         <Link href="/dashboard">
-                            <button className="btn-primary" style={{ padding: '0.5rem 1.1rem', fontSize: '0.85rem' }}>
-                                → Dashboard
-                            </button>
+                            <button className="btn-primary px-4 py-2 text-[0.85rem]">→ Dashboard</button>
                         </Link>
                     ) : (
                         <>
-                            <Link href="/login" className="nav-link" style={{ fontSize: '0.875rem' }}>Sign in</Link>
+                            <Link href="/login" className="nav-link text-[0.875rem]">Sign in</Link>
                             <Link href="/register">
-                                <button className="btn-primary" style={{ padding: '0.5rem 1.1rem', fontSize: '0.875rem' }}>
-                                    Get started free
-                                </button>
+                                <button className="btn-primary px-4 py-2 text-[0.875rem]">Get started free</button>
                             </Link>
                         </>
                     )}
                 </div>
-                {/* Mobile hamburger — always at top level so it's never hidden by parent */}
+
+                {/* Mobile hamburger */}
                 <button
                     onClick={() => setMobileMenuOpen(o => !o)}
-                    className="nav-hamburger"
-                    style={{ background: 'none', border: '1px solid var(--border)', borderRadius: '8px', color: 'var(--text-secondary)', padding: '0.4rem', cursor: 'pointer', display: 'none', alignItems: 'center', justifyContent: 'center' }}
+                    className="flex md:hidden items-center justify-center p-1.5 rounded-lg border border-border-subtle text-text-secondary cursor-pointer bg-transparent"
                     aria-label="Open menu"
                 >
                     {mobileMenuOpen
@@ -273,23 +227,26 @@ export default function HomePage() {
 
             {/* Mobile menu */}
             {mobileMenuOpen && (
-                <div style={{ position: 'fixed', top: '65px', left: 0, right: 0, zIndex: 99, background: 'var(--bg-card)', borderBottom: '1px solid var(--border)', padding: '1.25rem 1.5rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                    {['#features', '#how-it-works', '#pricing', '#testimonials'].map((h) => (
-                        <a key={h} href={h} onClick={() => setMobileMenuOpen(false)} style={{ color: 'var(--text-secondary)', textDecoration: 'none', fontSize: '0.9rem', fontWeight: 500, padding: '0.4rem 0' }}>
-                            {h.replace('#', '').replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
+                <div className="fixed top-[65px] left-0 right-0 z-[99] bg-card border-b border-border-subtle px-6 py-5 flex flex-col gap-3">
+                    {mobileNavLinks.map(h => (
+                        <a key={h} href={h} onClick={() => setMobileMenuOpen(false)}
+                           className="text-text-secondary no-underline text-[0.9rem] font-medium py-1.5">
+                            {h.replace('#','').replace(/-/g,' ').replace(/\b\w/g, c => c.toUpperCase())}
                         </a>
                     ))}
-                    {/* Auth links in mobile menu */}
-                    <div style={{ borderTop: '1px solid var(--border)', paddingTop: '0.75rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                    <div className="border-t border-border-subtle pt-3 flex flex-col gap-2">
                         {session ? (
-                            <Link href="/dashboard" onClick={() => setMobileMenuOpen(false)} style={{ display: 'block' }}>
-                                <button className="btn-primary" style={{ width: '100%', justifyContent: 'center', padding: '0.65rem 1rem' }}>→ Dashboard</button>
+                            <Link href="/dashboard" onClick={() => setMobileMenuOpen(false)}>
+                                <button className="btn-primary w-full justify-center py-2.5">→ Dashboard</button>
                             </Link>
                         ) : (
                             <>
-                                <Link href="/login" onClick={() => setMobileMenuOpen(false)} style={{ color: 'var(--text-secondary)', textDecoration: 'none', fontSize: '0.9rem', fontWeight: 500, padding: '0.4rem 0' }}>Sign in</Link>
-                                <Link href="/register" onClick={() => setMobileMenuOpen(false)} style={{ display: 'block' }}>
-                                    <button className="btn-primary" style={{ width: '100%', justifyContent: 'center', padding: '0.65rem 1rem' }}>Get started free</button>
+                                <Link href="/login" onClick={() => setMobileMenuOpen(false)}
+                                      className="text-text-secondary no-underline text-[0.9rem] font-medium py-1.5">
+                                    Sign in
+                                </Link>
+                                <Link href="/register" onClick={() => setMobileMenuOpen(false)}>
+                                    <button className="btn-primary w-full justify-center py-2.5">Get started free</button>
                                 </Link>
                             </>
                         )}
@@ -297,89 +254,97 @@ export default function HomePage() {
                 </div>
             )}
 
-            {/* ── Hero ─────────────────────────────────────────────────────── */}
-            <section style={{ position: 'relative', zIndex: 1, padding: '6rem 1.5rem 5rem', textAlign: 'center', maxWidth: '900px', margin: '0 auto' }}>
-                <div className="hero-tag" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.25)', borderRadius: '20px', padding: '0.35rem 1rem', marginBottom: '1.75rem' }}>
-                    <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#22c55e', boxShadow: '0 0 6px #22c55e', animation: 'shimmer 2s ease-in-out infinite' }} />
-                    <span style={{ fontSize: '0.8rem', fontWeight: 600, color: '#60a5fa', letterSpacing: '0.03em' }}>Now with AI-powered anomaly detection — coming soon</span>
+            {/* ── Hero ── */}
+            <section className="relative z-10 px-6 pt-24 pb-20 text-center max-w-[900px] mx-auto">
+                <div className="animate-float-up inline-flex items-center gap-2 px-4 py-1.5 rounded-full mb-7 border"
+                     style={{ background: 'rgba(59,130,246,0.1)', borderColor: 'rgba(59,130,246,0.25)' }}>
+                    <span className="w-2 h-2 rounded-full bg-[#22c55e] animate-shimmer"
+                          style={{ boxShadow: '0 0 6px #22c55e' }} />
+                    <span className="text-[0.8rem] font-semibold text-[#60a5fa] tracking-wide">
+                        Now with AI-powered anomaly detection — coming soon
+                    </span>
                 </div>
 
-                <h1 className="hero-h1 hero-h1-text" style={{ fontSize: '3.75rem', fontWeight: 900, lineHeight: 1.1, margin: '0 0 1.25rem', letterSpacing: '-0.03em', color: 'var(--text-primary)' }}>
+                <h1 className="animate-float-up-1 text-[3.75rem] leading-[1.1] font-black m-0 mb-5 tracking-tight text-text-primary
+                               text-[2.4rem] sm:text-[3.75rem]">
                     The IoT Dashboard<br />
                     <span style={{ background: 'linear-gradient(135deg, #60a5fa 0%, #a78bfa 50%, #34d399 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>
                         Built for Makers
                     </span>
                 </h1>
 
-                <p className="hero-sub" style={{ fontSize: '1.15rem', color: 'var(--text-secondary)', lineHeight: 1.7, maxWidth: '620px', margin: '0 auto 2.5rem' }}>
+                <p className="animate-float-up-2 text-[1.15rem] text-text-secondary leading-relaxed max-w-[620px] mx-auto mb-10">
                     Monitor every MQTT device in real time, automate with intelligent schedules, and visualise your sensor data — all in one stunning, secure dashboard.
                 </p>
 
-                <div className="hero-cta" style={{ display: 'flex', gap: '0.875rem', justifyContent: 'center', flexWrap: 'wrap' }}>
+                <div className="animate-float-up-3 flex gap-3.5 justify-center flex-wrap">
                     <Link href={session ? '/dashboard' : '/register'}>
-                        <button className="btn-primary" style={{ padding: '0.875rem 2rem', fontSize: '1rem', borderRadius: '14px', gap: '0.5rem' }}>
+                        <button className="btn-primary px-8 py-3.5 text-base rounded-2xl gap-2">
                             {session ? '→ Go to Dashboard' : '🚀 Start for free'}
                         </button>
                     </Link>
                     <a href="#how-it-works">
-                        <button className="btn-ghost" style={{ padding: '0.875rem 2rem', fontSize: '1rem', borderRadius: '14px' }}>
-                            See how it works
-                        </button>
+                        <button className="btn-ghost px-8 py-3.5 text-base rounded-2xl">See how it works</button>
                     </a>
                 </div>
 
-                <p style={{ marginTop: '1.25rem', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                <p className="mt-5 text-xs text-text-muted">
                     No credit card required · Free plan forever · Setup in under 5 minutes
                 </p>
 
-                {/* Hero Dashboard Preview Card */}
-                <div className="hero-card" style={{ marginTop: '4rem', position: 'relative' }}>
-                    <div style={{ position: 'absolute', inset: '-2px', background: 'linear-gradient(135deg, rgba(59,130,246,0.4), rgba(139,92,246,0.3), rgba(6,182,212,0.2))', borderRadius: '24px', filter: 'blur(12px)', opacity: 0.6 }} />
-                    <div style={{
-                        position: 'relative', background: 'rgba(13,22,40,0.95)',
-                        border: '1px solid rgba(255,255,255,0.1)',
-                        borderRadius: '20px', padding: '1.25rem', textAlign: 'left',
-                        backdropFilter: 'blur(20px)',
-                    }}>
-                        {/* Fake browser bar */}
-                        <div style={{ display: 'flex', gap: '0.4rem', marginBottom: '1rem' }}>
-                            {['#ef4444','#f59e0b','#22c55e'].map(c => <div key={c} style={{ width: '10px', height: '10px', borderRadius: '50%', background: c }} />)}
+                {/* Hero dashboard preview */}
+                <div className="animate-float-up-4 mt-16 relative">
+                    <div className="absolute inset-[-2px] rounded-3xl opacity-60"
+                         style={{ background: 'linear-gradient(135deg, rgba(59,130,246,0.4), rgba(139,92,246,0.3), rgba(6,182,212,0.2))', filter: 'blur(12px)' }} />
+                    <div className="relative rounded-[20px] p-5 text-left"
+                         style={{ background: 'rgba(13,22,40,0.95)', border: '1px solid rgba(255,255,255,0.1)', backdropFilter: 'blur(20px)' }}>
+                        {/* Browser dots */}
+                        <div className="flex gap-1.5 mb-4">
+                            {['#ef4444','#f59e0b','#22c55e'].map(c => (
+                                <div key={c} className="w-2.5 h-2.5 rounded-full" style={{ background: c }} />
+                            ))}
                         </div>
-                        {/* Fake UI */}
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '0.625rem', marginBottom: '1rem' }}>
+                        {/* Stat tiles */}
+                        <div className="grid grid-cols-4 gap-2.5 mb-4">
                             {[
-                                { label: 'Devices', value: '24', color: '#60a5fa', bg: 'rgba(59,130,246,0.12)' },
-                                { label: 'Online', value: '19', color: '#4ade80', bg: 'rgba(34,197,94,0.12)' },
-                                { label: 'Offline', value: '5', color: '#f87171', bg: 'rgba(239,68,68,0.1)' },
+                                { label: 'Devices',   value: '24', color: '#60a5fa', bg: 'rgba(59,130,246,0.12)' },
+                                { label: 'Online',    value: '19', color: '#4ade80', bg: 'rgba(34,197,94,0.12)' },
+                                { label: 'Offline',   value: '5',  color: '#f87171', bg: 'rgba(239,68,68,0.1)' },
                                 { label: 'Schedules', value: '38', color: '#c084fc', bg: 'rgba(139,92,246,0.12)' },
                             ].map(s => (
-                                <div key={s.label} style={{ background: s.bg, border: `1px solid ${s.color}22`, borderRadius: '12px', padding: '0.75rem' }}>
-                                    <div style={{ fontSize: '1.25rem', fontWeight: 800, color: s.color }}>{s.value}</div>
-                                    <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{s.label}</div>
+                                <div key={s.label} className="rounded-xl p-3"
+                                     style={{ background: s.bg, border: `1px solid ${s.color}22` }}>
+                                    <div className="text-xl font-extrabold" style={{ color: s.color }}>{s.value}</div>
+                                    <div className="text-[0.7rem] text-text-muted">{s.label}</div>
                                 </div>
                             ))}
                         </div>
-                        {/* Fake chart bars */}
-                        <div style={{ background: 'rgba(255,255,255,0.03)', borderRadius: '12px', padding: '1rem', marginBottom: '0.75rem' }}>
-                            <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginBottom: '0.75rem' }}>Sensor Readings — Last 7 days</div>
-                            <div style={{ display: 'flex', gap: '0.375rem', alignItems: 'flex-end', height: '60px' }}>
+                        {/* Fake chart */}
+                        <div className="rounded-xl p-4 mb-3" style={{ background: 'rgba(255,255,255,0.03)' }}>
+                            <div className="text-[0.72rem] text-text-muted mb-3">Sensor Readings — Last 7 days</div>
+                            <div className="flex gap-1.5 items-end h-[60px]">
                                 {[38,55,42,70,62,85,58].map((h, i) => (
-                                    <div key={i} style={{ flex: 1, background: `linear-gradient(to top, #3b82f6, #8b5cf6)`, borderRadius: '4px 4px 0 0', height: `${h}%`, opacity: 0.8, transition: 'height 0.5s ease' }} />
+                                    <div key={i} className="flex-1 rounded-t-sm opacity-80"
+                                         style={{ height: `${h}%`, background: 'linear-gradient(to top, #3b82f6, #8b5cf6)' }} />
                                 ))}
                             </div>
                         </div>
                         {/* Fake device rows */}
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                        <div className="flex flex-col gap-1.5">
                             {[
-                                { name: 'Roof Sensor A', id: 'ESP32_A1B2', online: true },
-                                { name: 'Basement Hub', id: 'ESP32_C3D4', online: true },
-                                { name: 'Gate Controller', id: 'NODEMCU_F1', online: false },
+                                { name: 'Roof Sensor A',  id: 'ESP32_A1B2',  online: true },
+                                { name: 'Basement Hub',   id: 'ESP32_C3D4',  online: true },
+                                { name: 'Gate Controller',id: 'NODEMCU_F1', online: false },
                             ].map(d => (
-                                <div key={d.id} style={{ display: 'flex', alignItems: 'center', gap: '0.625rem', padding: '0.5rem 0.75rem', borderRadius: '8px', background: 'rgba(255,255,255,0.03)' }}>
-                                    <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: d.online ? '#22c55e' : '#4b5563', boxShadow: d.online ? '0 0 6px #22c55e' : 'none' }} />
-                                    <span style={{ flex: 1, fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-primary)' }}>{d.name}</span>
-                                    <span style={{ fontSize: '0.68rem', fontFamily: 'monospace', color: 'var(--text-muted)' }}>{d.id}</span>
-                                    <span style={{ fontSize: '0.68rem', color: d.online ? '#4ade80' : 'var(--text-muted)', fontWeight: 600 }}>{d.online ? '● Online' : '○ Offline'}</span>
+                                <div key={d.id} className="flex items-center gap-2.5 px-3 py-2 rounded-lg"
+                                     style={{ background: 'rgba(255,255,255,0.03)' }}>
+                                    <span className="w-[7px] h-[7px] rounded-full flex-shrink-0"
+                                          style={{ background: d.online ? '#22c55e' : '#4b5563', boxShadow: d.online ? '0 0 6px #22c55e' : 'none' }} />
+                                    <span className="flex-1 text-[0.78rem] font-semibold text-text-primary">{d.name}</span>
+                                    <span className="text-[0.68rem] font-mono text-text-muted">{d.id}</span>
+                                    <span className="text-[0.68rem] font-semibold" style={{ color: d.online ? '#4ade80' : 'var(--text-muted)' }}>
+                                        {d.online ? '● Online' : '○ Offline'}
+                                    </span>
                                 </div>
                             ))}
                         </div>
@@ -387,61 +352,61 @@ export default function HomePage() {
                 </div>
             </section>
 
-            {/* ── Stats ─────────────────────────────────────────────────────── */}
-            <section ref={statsRef.ref} style={{ position: 'relative', zIndex: 1, padding: '3rem 1.5rem', borderTop: '1px solid var(--border)', borderBottom: '1px solid var(--border)', background: 'rgba(255,255,255,0.01)' }}>
-                <div style={{ maxWidth: '900px', margin: '0 auto' }}>
-                    <div className="stats-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1.5rem', textAlign: 'center' }}>
+            {/* ── Stats ── */}
+            <section ref={statsRef.ref} className="relative z-10 py-12 px-6 border-t border-b border-border-subtle" style={{ background: 'rgba(255,255,255,0.01)' }}>
+                <div className="max-w-[900px] mx-auto">
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-6 text-center">
                         {[
-                            { val: d1.toLocaleString(), suffix: '+', label: 'Connected Devices' },
-                            { val: d2, suffix: '.9% uptime', label: 'Reliability SLA' },
-                            { val: d3, suffix: '+', label: 'Teams Using MQTTHub' },
-                            { val: `<${d4}`, suffix: 's latency', label: 'Average Data Delay' },
+                            { val: d1.toLocaleString(), suffix: '+',         label: 'Connected Devices' },
+                            { val: d2,                   suffix: '.9% uptime',label: 'Reliability SLA' },
+                            { val: d3,                   suffix: '+',         label: 'Teams Using MQTTHub' },
+                            { val: `<${d4}`,             suffix: 's latency', label: 'Average Data Delay' },
                         ].map((s, i) => (
                             <div key={i}>
-                                <div style={{ fontSize: '2.25rem', fontWeight: 900, background: 'linear-gradient(135deg,#60a5fa,#a78bfa)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text', lineHeight: 1.1 }}>
-                                    {s.val}{s.suffix}
-                                </div>
-                                <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)', marginTop: '0.35rem' }}>{s.label}</div>
+                                <div className="text-[2.25rem] font-black leading-tight gradient-text">{s.val}{s.suffix}</div>
+                                <div className="text-[0.82rem] text-text-muted mt-1.5">{s.label}</div>
                             </div>
                         ))}
                     </div>
                 </div>
             </section>
 
-            {/* ── Features ──────────────────────────────────────────────────── */}
-            <section id="features" style={{ position: 'relative', zIndex: 1, padding: '6rem 1.5rem', maxWidth: '1200px', margin: '0 auto' }}>
-                <div style={{ textAlign: 'center', marginBottom: '3.5rem' }}>
-                    <div style={{ display: 'inline-flex', padding: '0.25rem 0.875rem', background: 'rgba(139,92,246,0.1)', border: '1px solid rgba(139,92,246,0.25)', borderRadius: '20px', marginBottom: '1rem' }}>
-                        <span style={{ fontSize: '0.78rem', fontWeight: 600, color: '#c084fc', letterSpacing: '0.05em' }}>EVERYTHING YOU NEED</span>
+            {/* ── Features ── */}
+            <section id="features" className="relative z-10 py-24 px-6 max-w-[1200px] mx-auto">
+                <div className="text-center mb-14">
+                    <div className="inline-flex px-3.5 py-1 rounded-full mb-4 border"
+                         style={{ background: 'rgba(139,92,246,0.1)', borderColor: 'rgba(139,92,246,0.25)' }}>
+                        <span className="text-[0.78rem] font-semibold text-[#c084fc] tracking-wider uppercase">Everything You Need</span>
                     </div>
-                    <h2 style={{ fontSize: '2.5rem', fontWeight: 900, color: 'var(--text-primary)', margin: '0 0 1rem', letterSpacing: '-0.02em' }}>Built for serious IoT work</h2>
-                    <p style={{ fontSize: '1rem', color: 'var(--text-secondary)', maxWidth: '520px', margin: '0 auto', lineHeight: 1.7 }}>
+                    <h2 className="text-[2.5rem] font-black text-text-primary m-0 mb-4 tracking-tight">Built for serious IoT work</h2>
+                    <p className="text-base text-text-secondary max-w-[520px] mx-auto leading-relaxed">
                         Every feature was designed around real MQTT workflows — from flashing your first microcontroller to managing an entire device fleet.
                     </p>
                 </div>
-                <div className="features-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1rem' }}>
-                    {features.map((f) => <FeatureCard key={f.title} {...f} />)}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    {features.map(f => <FeatureCard key={f.title} {...f} />)}
                 </div>
             </section>
 
-            {/* ── How it works ──────────────────────────────────────────────── */}
-            <section id="how-it-works" style={{ position: 'relative', zIndex: 1, padding: '6rem 1.5rem', background: 'rgba(255,255,255,0.01)', borderTop: '1px solid var(--border)', borderBottom: '1px solid var(--border)' }}>
-                <div style={{ maxWidth: '900px', margin: '0 auto', textAlign: 'center' }}>
-                    <div style={{ display: 'inline-flex', padding: '0.25rem 0.875rem', background: 'rgba(6,182,212,0.1)', border: '1px solid rgba(6,182,212,0.25)', borderRadius: '20px', marginBottom: '1rem' }}>
-                        <span style={{ fontSize: '0.78rem', fontWeight: 600, color: '#22d3ee', letterSpacing: '0.05em' }}>QUICK SETUP</span>
+            {/* ── How it works ── */}
+            <section id="how-it-works" className="relative z-10 py-24 px-6 border-t border-b border-border-subtle" style={{ background: 'rgba(255,255,255,0.01)' }}>
+                <div className="max-w-[900px] mx-auto text-center">
+                    <div className="inline-flex px-3.5 py-1 rounded-full mb-4 border"
+                         style={{ background: 'rgba(6,182,212,0.1)', borderColor: 'rgba(6,182,212,0.25)' }}>
+                        <span className="text-[0.78rem] font-semibold text-[#22d3ee] tracking-wider uppercase">Quick Setup</span>
                     </div>
-                    <h2 style={{ fontSize: '2.5rem', fontWeight: 900, color: 'var(--text-primary)', margin: '0 0 1rem', letterSpacing: '-0.02em' }}>Up and running in minutes</h2>
-                    <p style={{ color: 'var(--text-secondary)', fontSize: '1rem', lineHeight: 1.7, marginBottom: '3.5rem' }}>
+                    <h2 className="text-[2.5rem] font-black text-text-primary m-0 mb-4 tracking-tight">Up and running in minutes</h2>
+                    <p className="text-text-secondary text-base leading-relaxed mb-14">
                         No complex infrastructure. No DevOps expertise needed. Just plug, flash, and monitor.
                     </p>
-                    <div className="steps-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1.5rem', textAlign: 'left' }}>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-left">
                         {steps.map((s, i) => (
-                            <div key={i} style={{ position: 'relative', padding: '1.75rem', background: 'rgba(17,24,39,0.7)', border: '1px solid var(--border)', borderRadius: '20px' }}>
-                                <div style={{ fontSize: '3rem', fontWeight: 900, color: 'var(--border-light)', lineHeight: 1, marginBottom: '1rem', letterSpacing: '-0.05em' }}>{s.n}</div>
-                                <h3 style={{ fontSize: '1.05rem', fontWeight: 700, color: 'var(--text-primary)', margin: '0 0 0.5rem' }}>{s.title}</h3>
-                                <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', margin: 0, lineHeight: 1.65 }}>{s.desc}</p>
+                            <div key={i} className="relative p-7 rounded-[20px] border border-border-subtle" style={{ background: 'rgba(17,24,39,0.7)' }}>
+                                <div className="text-[3rem] font-black text-border-light leading-none mb-4 tracking-tighter">{s.n}</div>
+                                <h3 className="text-[1.05rem] font-bold text-text-primary m-0 mb-2">{s.title}</h3>
+                                <p className="text-sm text-text-secondary m-0 leading-relaxed">{s.desc}</p>
                                 {i < steps.length - 1 && (
-                                    <div style={{ position: 'absolute', top: '1.75rem', right: '-0.75rem', zIndex: 2, color: 'var(--text-muted)', fontSize: '1.2rem' }}>→</div>
+                                    <div className="absolute top-7 -right-3 z-20 text-text-muted text-xl hidden md:block">→</div>
                                 )}
                             </div>
                         ))}
@@ -449,46 +414,49 @@ export default function HomePage() {
                 </div>
             </section>
 
-            {/* ── Pricing ───────────────────────────────────────────────────── */}
-            <section id="pricing" style={{ position: 'relative', zIndex: 1, padding: '6rem 1.5rem', maxWidth: '1100px', margin: '0 auto' }}>
-                <div style={{ textAlign: 'center', marginBottom: '3.5rem' }}>
-                    <div style={{ display: 'inline-flex', padding: '0.25rem 0.875rem', background: 'rgba(251,191,36,0.1)', border: '1px solid rgba(251,191,36,0.25)', borderRadius: '20px', marginBottom: '1rem' }}>
-                        <span style={{ fontSize: '0.78rem', fontWeight: 600, color: '#fbbf24', letterSpacing: '0.05em' }}>PRICING</span>
+            {/* ── Pricing ── */}
+            <section id="pricing" className="relative z-10 py-24 px-6 max-w-[1100px] mx-auto">
+                <div className="text-center mb-14">
+                    <div className="inline-flex px-3.5 py-1 rounded-full mb-4 border"
+                         style={{ background: 'rgba(251,191,36,0.1)', borderColor: 'rgba(251,191,36,0.25)' }}>
+                        <span className="text-[0.78rem] font-semibold text-[#fbbf24] tracking-wider uppercase">Pricing</span>
                     </div>
-                    <h2 style={{ fontSize: '2.5rem', fontWeight: 900, color: 'var(--text-primary)', margin: '0 0 1rem', letterSpacing: '-0.02em' }}>Simple, honest pricing</h2>
-                    <p style={{ color: 'var(--text-secondary)', fontSize: '1rem', lineHeight: 1.7 }}>
-                        Start free. Scale as you grow. No surprise bills.
-                    </p>
+                    <h2 className="text-[2.5rem] font-black text-text-primary m-0 mb-4 tracking-tight">Simple, honest pricing</h2>
+                    <p className="text-text-secondary text-base leading-relaxed">Start free. Scale as you grow. No surprise bills.</p>
                 </div>
-                <div className="pricing-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1.25rem', alignItems: 'center' }}>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-5 items-center">
                     {pricing.map(p => <PricingCard key={p.name} {...p} />)}
                 </div>
-                <p style={{ textAlign: 'center', marginTop: '2rem', fontSize: '0.82rem', color: 'var(--text-muted)' }}>
+                <p className="text-center mt-8 text-[0.82rem] text-text-muted">
                     All plans include AWS-backed storage, MQTT support, and basic analytics. Prices in USD. Billed monthly.
                 </p>
             </section>
 
-            {/* ── Testimonials ──────────────────────────────────────────────── */}
-            <section id="testimonials" style={{ position: 'relative', zIndex: 1, padding: '6rem 1.5rem', borderTop: '1px solid var(--border)', background: 'rgba(255,255,255,0.01)' }}>
-                <div style={{ maxWidth: '1100px', margin: '0 auto' }}>
-                    <div style={{ textAlign: 'center', marginBottom: '3.5rem' }}>
-                        <div style={{ display: 'inline-flex', padding: '0.25rem 0.875rem', background: 'rgba(52,211,153,0.1)', border: '1px solid rgba(52,211,153,0.25)', borderRadius: '20px', marginBottom: '1rem' }}>
-                            <span style={{ fontSize: '0.78rem', fontWeight: 600, color: '#34d399', letterSpacing: '0.05em' }}>LOVED BY MAKERS</span>
+            {/* ── Testimonials ── */}
+            <section id="testimonials" className="relative z-10 py-24 px-6 border-t border-border-subtle" style={{ background: 'rgba(255,255,255,0.01)' }}>
+                <div className="max-w-[1100px] mx-auto">
+                    <div className="text-center mb-14">
+                        <div className="inline-flex px-3.5 py-1 rounded-full mb-4 border"
+                             style={{ background: 'rgba(52,211,153,0.1)', borderColor: 'rgba(52,211,153,0.25)' }}>
+                            <span className="text-[0.78rem] font-semibold text-[#34d399] tracking-wider uppercase">Loved by Makers</span>
                         </div>
-                        <h2 style={{ fontSize: '2.5rem', fontWeight: 900, color: 'var(--text-primary)', margin: '0 0 1rem', letterSpacing: '-0.02em' }}>Don&apos;t take our word for it</h2>
+                        <h2 className="text-[2.5rem] font-black text-text-primary m-0 mb-4 tracking-tight">Don&apos;t take our word for it</h2>
                     </div>
-                    <div className="testi-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1.25rem' }}>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
                         {testimonials.map((t, i) => (
-                            <div key={i} style={{ background: 'rgba(17,24,39,0.7)', border: '1px solid var(--border)', borderRadius: '20px', padding: '1.75rem' }}>
-                                <div style={{ display: 'flex', gap: '0.15rem', marginBottom: '1rem' }}>
-                                    {[...Array(5)].map((_, j) => <span key={j} style={{ color: '#fbbf24', fontSize: '0.9rem' }}>★</span>)}
+                            <div key={i} className="rounded-[20px] p-7 border border-border-subtle" style={{ background: 'rgba(17,24,39,0.7)' }}>
+                                <div className="flex gap-0.5 mb-4">
+                                    {[...Array(5)].map((_, j) => <span key={j} className="text-[#fbbf24] text-[0.9rem]">★</span>)}
                                 </div>
-                                <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', lineHeight: 1.7, margin: '0 0 1.25rem', fontStyle: 'italic' }}>&ldquo;{t.text}&rdquo;</p>
-                                <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
-                                    <div style={{ width: '38px', height: '38px', borderRadius: '50%', background: 'linear-gradient(135deg,rgba(59,130,246,0.2),rgba(139,92,246,0.2))', border: '1px solid rgba(59,130,246,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.1rem' }}>{t.avatar}</div>
+                                <p className="text-[0.9rem] text-text-secondary leading-relaxed m-0 mb-5 italic">&ldquo;{t.text}&rdquo;</p>
+                                <div className="flex gap-3 items-center">
+                                    <div className="w-[38px] h-[38px] rounded-full flex items-center justify-center text-[1.1rem]"
+                                         style={{ background: 'linear-gradient(135deg,rgba(59,130,246,0.2),rgba(139,92,246,0.2))', border: '1px solid rgba(59,130,246,0.3)' }}>
+                                        {t.avatar}
+                                    </div>
                                     <div>
-                                        <div style={{ fontSize: '0.875rem', fontWeight: 700, color: 'var(--text-primary)' }}>{t.name}</div>
-                                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{t.role}</div>
+                                        <div className="text-sm font-bold text-text-primary">{t.name}</div>
+                                        <div className="text-xs text-text-muted">{t.role}</div>
                                     </div>
                                 </div>
                             </div>
@@ -497,84 +465,79 @@ export default function HomePage() {
                 </div>
             </section>
 
-            {/* ── Final CTA ─────────────────────────────────────────────────── */}
-            <section style={{ position: 'relative', zIndex: 1, padding: '6rem 1.5rem', textAlign: 'center' }}>
-                <div style={{ maxWidth: '700px', margin: '0 auto', position: 'relative' }}>
-                    <div style={{ position: 'absolute', inset: '-40px', background: 'radial-gradient(ellipse, rgba(59,130,246,0.12) 0%, transparent 70%)', pointerEvents: 'none' }} />
-                    <div style={{ display: 'inline-flex', padding: '0.25rem 0.875rem', background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.25)', borderRadius: '20px', marginBottom: '1.5rem' }}>
-                        <span style={{ fontSize: '0.78rem', fontWeight: 600, color: '#60a5fa', letterSpacing: '0.05em' }}>GET STARTED TODAY</span>
+            {/* ── Final CTA ── */}
+            <section className="relative z-10 py-24 px-6 text-center">
+                <div className="max-w-[700px] mx-auto relative">
+                    <div className="absolute inset-[-40px] pointer-events-none"
+                         style={{ background: 'radial-gradient(ellipse, rgba(59,130,246,0.12) 0%, transparent 70%)' }} />
+                    <div className="inline-flex px-3.5 py-1 rounded-full mb-6 border"
+                         style={{ background: 'rgba(59,130,246,0.1)', borderColor: 'rgba(59,130,246,0.25)' }}>
+                        <span className="text-[0.78rem] font-semibold text-[#60a5fa] tracking-wider uppercase">Get Started Today</span>
                     </div>
-                    <h2 style={{ fontSize: '2.75rem', fontWeight: 900, color: 'var(--text-primary)', margin: '0 0 1.25rem', letterSpacing: '-0.02em', lineHeight: 1.15 }}>
+                    <h2 className="text-[2.75rem] font-black text-text-primary m-0 mb-5 tracking-tight leading-[1.15]">
                         Your IoT fleet deserves<br />a better dashboard
                     </h2>
-                    <p style={{ fontSize: '1rem', color: 'var(--text-secondary)', lineHeight: 1.7, marginBottom: '2.5rem' }}>
+                    <p className="text-base text-text-secondary leading-relaxed mb-10">
                         Join hundreds of engineers and makers who trust MQTTHub to keep their connected devices visible, automated, and under control.
                     </p>
-                    <div style={{ display: 'flex', gap: '0.875rem', justifyContent: 'center', flexWrap: 'wrap' }}>
+                    <div className="flex gap-3.5 justify-center flex-wrap">
                         <Link href={session ? '/dashboard' : '/register'}>
-                            <button className="btn-primary" style={{ padding: '1rem 2.25rem', fontSize: '1rem', borderRadius: '14px' }}>
+                            <button className="btn-primary px-9 py-4 text-base rounded-2xl">
                                 {session ? '→ Go to Dashboard' : '🚀 Start building for free'}
                             </button>
                         </Link>
                         <a href="mailto:hello@mqtthub.io">
-                            <button className="btn-ghost" style={{ padding: '1rem 2rem', fontSize: '1rem', borderRadius: '14px' }}>
-                                Talk to sales
-                            </button>
+                            <button className="btn-ghost px-8 py-4 text-base rounded-2xl">Talk to sales</button>
                         </a>
                     </div>
                 </div>
             </section>
 
-            {/* ── Footer ────────────────────────────────────────────────────── */}
-            <footer style={{ position: 'relative', zIndex: 1, borderTop: '1px solid var(--border)', padding: '3rem 1.5rem 2rem' }}>
-                <div style={{ maxWidth: '1100px', margin: '0 auto' }}>
-                    <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr', gap: '2rem', marginBottom: '2.5rem', flexWrap: 'wrap' as const }}>
-                        <div>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.875rem' }}>
-                                <div style={{ width: '28px', height: '28px', background: 'linear-gradient(135deg,#3b82f6,#8b5cf6)', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round"><path d="M6 18v-6"/><path d="M10 18V5"/><path d="M14 18v-3"/><path d="M18 18v-8"/></svg>
+            {/* ── Footer ── */}
+            <footer className="relative z-10 border-t border-border-subtle pt-12 pb-8 px-6">
+                <div className="max-w-[1100px] mx-auto">
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-8 mb-10">
+                        <div className="col-span-2 md:col-span-1">
+                            <div className="flex items-center gap-2 mb-3.5">
+                                <div className="w-7 h-7 rounded-lg flex items-center justify-center"
+                                     style={{ background: 'linear-gradient(135deg,#3b82f6,#8b5cf6)' }}>
+                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round">
+                                        <path d="M6 18v-6"/><path d="M10 18V5"/><path d="M14 18v-3"/><path d="M18 18v-8"/>
+                                    </svg>
                                 </div>
-                                <span style={{ fontWeight: 800, fontSize: '0.9rem', color: 'var(--text-primary)' }}>MQTT<span style={{ color: '#60a5fa' }}>Hub</span></span>
+                                <span className="font-extrabold text-[0.9rem] text-text-primary">MQTT<span className="text-[#60a5fa]">Hub</span></span>
                             </div>
-                            <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)', lineHeight: 1.7, margin: 0, maxWidth: '240px' }}>
+                            <p className="text-[0.82rem] text-text-muted leading-relaxed m-0 max-w-[240px]">
                                 The modern IoT management platform for engineers, makers, and teams who rely on MQTT.
                             </p>
                         </div>
                         {[
-                            { title: 'Product', links: ['Features', 'Pricing', 'Changelog', 'Roadmap'] },
-                            { title: 'Developers', links: ['API Docs', 'MQTT Guide', 'SDKs', 'Status'] },
-                            { title: 'Company', links: ['About', 'Blog', 'Privacy', 'Terms'] },
+                            { title: 'Product',    links: ['Features','Pricing','Changelog','Roadmap'] },
+                            { title: 'Developers', links: ['API Docs','MQTT Guide','SDKs','Status'] },
+                            { title: 'Company',    links: ['About','Blog','Privacy','Terms'] },
                         ].map(col => (
                             <div key={col.title}>
-                                <div style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '0.875rem' }}>{col.title}</div>
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                                    {col.links.map(l => <a key={l} href="#" style={{ fontSize: '0.82rem', color: 'var(--text-muted)', textDecoration: 'none', transition: 'color 0.15s' }} onMouseEnter={e => (e.currentTarget.style.color = 'var(--text-secondary)')} onMouseLeave={e => (e.currentTarget.style.color = 'var(--text-muted)')}>{l}</a>)}
+                                <div className="text-[0.78rem] font-bold text-text-secondary uppercase tracking-wider mb-3.5">{col.title}</div>
+                                <div className="flex flex-col gap-2">
+                                    {col.links.map(l => (
+                                        <a key={l} href="#" className="text-[0.82rem] text-text-muted no-underline transition-colors duration-150 hover:text-text-secondary">{l}</a>
+                                    ))}
                                 </div>
                             </div>
                         ))}
                     </div>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: '1.5rem', borderTop: '1px solid var(--border)', flexWrap: 'wrap', gap: '0.75rem' }}>
-                        <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', margin: 0 }}>
+                    <div className="flex items-center justify-between pt-6 border-t border-border-subtle flex-wrap gap-3">
+                        <p className="text-[0.78rem] text-text-muted m-0">
                             © 2026 MQTTHub. All rights reserved. Built with ❤️ for the IoT community.
                         </p>
-                        <div style={{ display: 'flex', gap: '1rem' }}>
-                            {['Twitter', 'GitHub', 'Discord'].map(s => <a key={s} href="#" style={{ fontSize: '0.78rem', color: 'var(--text-muted)', textDecoration: 'none' }}>{s}</a>)}
+                        <div className="flex gap-4">
+                            {['Twitter','GitHub','Discord'].map(s => (
+                                <a key={s} href="#" className="text-[0.78rem] text-text-muted no-underline hover:text-text-secondary">{s}</a>
+                            ))}
                         </div>
                     </div>
                 </div>
             </footer>
-
-            <style>{`
-                @media (max-width: 900px) {
-                    .features-grid { grid-template-columns: 1fr 1fr !important; }
-                }
-                @media (max-width: 768px) {
-                    footer > div > div:first-child { grid-template-columns: 1fr 1fr !important; }
-                }
-                @media (max-width: 480px) {
-                    footer > div > div:first-child { grid-template-columns: 1fr !important; }
-                }
-            `}</style>
         </div>
     )
 }
