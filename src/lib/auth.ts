@@ -12,6 +12,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         async jwt({ token, user }) {
             if (user) {
                 token.userId = user.id
+                token.accountId = user.accountId ?? user.id
                 token.name = user.name
                 token.email = user.email
             }
@@ -20,6 +21,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         async session({ session, token }) {
             if (token && session.user) {
                 session.user.id = token.userId as string
+                session.user.accountId = token.accountId as string
                 session.user.name = token.name as string
                 session.user.email = token.email as string
             }
@@ -43,7 +45,12 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                 const valid = await bcrypt.compare(password, user.passwordHash)
                 if (!valid) return null
 
-                return { id: user.userId, name: user.name, email: user.email }
+                return {
+                    id: user.userId,
+                    name: user.name,
+                    email: user.email,
+                    accountId: user.accountId,
+                }
             },
         }),
     ],

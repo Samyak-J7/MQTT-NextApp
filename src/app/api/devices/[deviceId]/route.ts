@@ -1,15 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { getDevice, putDevice, deleteDevice } from '@/lib/dynamo'
+import { logAction } from '@/lib/audit'
 
 interface RouteParams { params: Promise<{ deviceId: string }> }
 
 export async function GET(_req: NextRequest, { params }: RouteParams): Promise<NextResponse> {
     const session = await auth()
-    if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    if (!session?.user?.accountId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     const { deviceId } = await params
-    const device = await getDevice(session.user.id, deviceId)
+    const device = await getDevice(session.user.accountId, deviceId)
     if (!device) return NextResponse.json({ error: 'Device not found' }, { status: 404 })
 
     return NextResponse.json({ device })
@@ -17,10 +18,10 @@ export async function GET(_req: NextRequest, { params }: RouteParams): Promise<N
 
 export async function PATCH(req: NextRequest, { params }: RouteParams): Promise<NextResponse> {
     const session = await auth()
-    if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    if (!session?.user?.accountId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     const { deviceId } = await params
-    const device = await getDevice(session.user.id, deviceId)
+    const device = await getDevice(session.user.accountId, deviceId)
     if (!device) return NextResponse.json({ error: 'Device not found' }, { status: 404 })
 
     const { name, location, description } = await req.json()
@@ -32,14 +33,37 @@ export async function PATCH(req: NextRequest, { params }: RouteParams): Promise<
     }
 
     await putDevice(updated)
+
+    await logAction(
+        session.user.accountId,
+        session.user.id,
+        session.user.email ?? '',
+        'device.update',
+        deviceId,
+        `Updated device "${updated.name}"`
+    )
+
     return NextResponse.json({ device: updated })
 }
 
 export async function DELETE(_req: NextRequest, { params }: RouteParams): Promise<NextResponse> {
     const session = await auth()
-    if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    if (!session?.user?.accountId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     const { deviceId } = await params
-    await deleteDevice(session.user.id, deviceId)
+    const device = await getDevice(session.user.accountId, deviceId)
+    if (!device) return NextResponse.json({ error: 'Device not found' }, { status: 404 })
+
+    await deleteDevice(session.user.accountId, deviceId)
+
+    await logAction(
+        session.user.accountId,
+        session.user.id,
+        session.user.email ?? '',
+        'device.delete',
+        deviceId,
+        `Deleted device "${device.name}"`
+    )
+
     return NextResponse.json({ message: 'Device deleted' })
 }

@@ -5,9 +5,8 @@ import {
     PutCommand,
     DeleteCommand,
     QueryCommand,
-    ScanCommand,
 } from '@aws-sdk/lib-dynamodb'
-import { User, Device, SensorReading } from '@/app/types'
+import { User, Device, SensorReading, AuditLog } from '@/app/types'
 
 const client = new DynamoDBClient({
     region: process.env.AWS_REGION,
@@ -20,6 +19,7 @@ const client = new DynamoDBClient({
 export const docClient = DynamoDBDocumentClient.from(client)
 
 // ─── Users ────────────────────────────────────────────────────────────────────
+// Table: MQTTUsers — PK: email
 
 export async function getUserByEmail(email: string): Promise<User | null> {
     const res = await docClient.send(new GetCommand({
@@ -38,20 +38,22 @@ export async function createUser(user: User): Promise<void> {
 }
 
 // ─── Devices ──────────────────────────────────────────────────────────────────
+// Table: MQTTDevices — PK: accountId (string), SK: deviceId (string)
+// Note: recreate table if migrating from old schema where PK was userId
 
-export async function getDevicesByUser(userId: string): Promise<Device[]> {
+export async function getDevicesByAccount(accountId: string): Promise<Device[]> {
     const res = await docClient.send(new QueryCommand({
         TableName: 'MQTTDevices',
-        KeyConditionExpression: 'userId = :uid',
-        ExpressionAttributeValues: { ':uid': userId },
+        KeyConditionExpression: 'accountId = :aid',
+        ExpressionAttributeValues: { ':aid': accountId },
     }))
     return (res.Items as Device[]) ?? []
 }
 
-export async function getDevice(userId: string, deviceId: string): Promise<Device | null> {
+export async function getDevice(accountId: string, deviceId: string): Promise<Device | null> {
     const res = await docClient.send(new GetCommand({
         TableName: 'MQTTDevices',
-        Key: { userId, deviceId },
+        Key: { accountId, deviceId },
     }))
     return (res.Item as Device) ?? null
 }
@@ -63,14 +65,15 @@ export async function putDevice(device: Device): Promise<void> {
     }))
 }
 
-export async function deleteDevice(userId: string, deviceId: string): Promise<void> {
+export async function deleteDevice(accountId: string, deviceId: string): Promise<void> {
     await docClient.send(new DeleteCommand({
         TableName: 'MQTTDevices',
-        Key: { userId, deviceId },
+        Key: { accountId, deviceId },
     }))
 }
 
 // ─── Readings ─────────────────────────────────────────────────────────────────
+// Table: SensorReadings — PK: deviceId (string), SK: timestamp (number)
 
 export async function getReadings(
     deviceId: string,
@@ -107,16 +110,63 @@ export async function getReadings(
     return (res.Items as SensorReading[]) ?? []
 }
 
-export async function getAllDeviceReadingsSummary(): Promise<Record<string, SensorReading>> {
-    // Scan all readings, return last reading per device (for dashboard status)
-    const res = await docClient.send(new ScanCommand({ TableName: 'SensorReadings' }))
-    const items = (res.Items as SensorReading[]) ?? []
-    const map: Record<string, SensorReading> = {}
-    for (const item of items) {
-        const existing = map[item.deviceId]
-        if (!existing || item.timestamp > existing.timestamp) {
-            map[item.deviceId] = item
+// ─── Heartbeats ───────────────────────────────────────────────────────────────
+// Table: DeviceHeartbeats — PK: deviceId (string)
+// Simple upsert — always one row per device, unknown IDs are harmless (never queried).
+
+export async function putHeartbeat(deviceId: string): Promise<void> {
+    await docClient.send(new PutCommand({
+        TableName: 'DeviceHeartbeats',
+        Item: { deviceId, lastSeen: Date.now() },
+    }))
+}
+
+export async function getHeartbeats(deviceIds: string[]): Promise<Record<string, number>> {
+    if (deviceIds.length === 0) return {}
+
+    // BatchGet in chunks of 100 (DynamoDB limit)
+    const map: Record<string, number> = {}
+    const chunks: string[][] = []
+    for (let i = 0; i < deviceIds.length; i += 100) chunks.push(deviceIds.slice(i, i + 100))
+
+    const { BatchGetCommand } = await import('@aws-sdk/lib-dynamodb')
+    for (const chunk of chunks) {
+        try {
+            const res = await docClient.send(new BatchGetCommand({
+                RequestItems: {
+                    DeviceHeartbeats: {
+                        Keys: chunk.map(id => ({ deviceId: id })),
+                    },
+                },
+            }))
+            const items = res.Responses?.DeviceHeartbeats ?? []
+            for (const item of items) {
+                map[item.deviceId as string] = item.lastSeen as number
+            }
+        } catch (err) {
+            console.error('getHeartbeats BatchGet failed:', err)
         }
     }
     return map
+}
+
+// ─── Audit Logs ───────────────────────────────────────────────────────────────
+// Table: AuditLogs — PK: accountId (string), SK: ts (string, format: timestamp#logId)
+
+export async function putAuditLog(log: AuditLog): Promise<void> {
+    await docClient.send(new PutCommand({
+        TableName: 'AuditLogs',
+        Item: log,
+    }))
+}
+
+export async function getAuditLogs(accountId: string, limit = 100): Promise<AuditLog[]> {
+    const res = await docClient.send(new QueryCommand({
+        TableName: 'AuditLogs',
+        KeyConditionExpression: 'accountId = :aid',
+        ExpressionAttributeValues: { ':aid': accountId },
+        ScanIndexForward: false,
+        Limit: limit,
+    }))
+    return (res.Items as AuditLog[]) ?? []
 }

@@ -13,18 +13,20 @@ function AddScheduleModal({ devices, onClose, onAdded }: {
     onClose: () => void
     onAdded: () => void
 }) {
-    const [form, setForm] = useState({ deviceId: devices[0]?.deviceId ?? '', mode: 'TTR', hh: '08', mm: '00', relays: ['0', '0', '0', '0'] })
+    const [form, setForm] = useState({ deviceId: devices[0]?.deviceId ?? '', mode: 'TTR', hh: '08', mm: '00' })
     const [loading, setLoading] = useState(false)
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault()
         setLoading(true)
         try {
-            const trigAt = form.mode === 'TTR' ? `${form.hh.padStart(2,'0')}${form.mm.padStart(2,'0')}` : '0000'
+            const trigAt = form.mode === 'TTR'
+                ? `${form.hh.padStart(2, '0')}${form.mm.padStart(2, '0')}`
+                : '0000'
             const res = await fetch(`/api/devices/${form.deviceId}/schedules`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ mode: form.mode, trigAt, relays: form.relays.map(Number) }),
+                body: JSON.stringify({ mode: form.mode, trigAt }),
             })
             const data = await res.json()
             if (!res.ok) throw new Error(data.error)
@@ -48,13 +50,15 @@ function AddScheduleModal({ devices, onClose, onAdded }: {
                 <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.375rem' }}>
                         <label style={{ fontSize: '0.8rem', fontWeight: 500, color: 'var(--text-secondary)' }}>Device</label>
-                        <select className="input-dark" value={form.deviceId} onChange={e => setForm(f => ({ ...f, deviceId: e.target.value }))}>
+                        <select className="input-dark" value={form.deviceId}
+                            onChange={e => setForm(f => ({ ...f, deviceId: e.target.value }))}>
                             {devices.map(d => <option key={d.deviceId} value={d.deviceId}>{d.name}</option>)}
                         </select>
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.375rem' }}>
                         <label style={{ fontSize: '0.8rem', fontWeight: 500, color: 'var(--text-secondary)' }}>Mode</label>
-                        <select className="input-dark" value={form.mode} onChange={e => setForm(f => ({ ...f, mode: e.target.value }))}>
+                        <select className="input-dark" value={form.mode}
+                            onChange={e => setForm(f => ({ ...f, mode: e.target.value }))}>
                             <option value="TTR">⏱ Time Trigger</option>
                             <option value="SWITCH">🔘 Switch</option>
                             <option value="SRS">🌅 Sunrise</option>
@@ -65,26 +69,16 @@ function AddScheduleModal({ devices, onClose, onAdded }: {
                         <div style={{ display: 'flex', gap: '0.75rem' }}>
                             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '0.375rem' }}>
                                 <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Hour</label>
-                                <input className="input-dark" type="number" min="0" max="23" value={form.hh} onChange={e => setForm(f => ({ ...f, hh: e.target.value }))} />
+                                <input className="input-dark" type="number" min="0" max="23" value={form.hh}
+                                    onChange={e => setForm(f => ({ ...f, hh: e.target.value }))} />
                             </div>
                             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '0.375rem' }}>
                                 <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Minute</label>
-                                <input className="input-dark" type="number" min="0" max="59" value={form.mm} onChange={e => setForm(f => ({ ...f, mm: e.target.value }))} />
+                                <input className="input-dark" type="number" min="0" max="59" value={form.mm}
+                                    onChange={e => setForm(f => ({ ...f, mm: e.target.value }))} />
                             </div>
                         </div>
                     )}
-                    <div>
-                        <label style={{ fontSize: '0.8rem', fontWeight: 500, color: 'var(--text-secondary)', display: 'block', marginBottom: '0.5rem' }}>Relay Values</label>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
-                            {form.relays.map((v, i) => (
-                                <div key={i}>
-                                    <label style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Relay {i + 1}</label>
-                                    <input className="input-dark" type="number" min="0" value={v} style={{ marginTop: '0.25rem' }}
-                                        onChange={e => setForm(f => { const r = [...f.relays]; r[i] = e.target.value; return { ...f, relays: r } })} />
-                                </div>
-                            ))}
-                        </div>
-                    </div>
                     <div style={{ display: 'flex', gap: '0.75rem', marginTop: '0.25rem' }}>
                         <button type="button" onClick={onClose} className="btn-ghost" style={{ flex: 1, justifyContent: 'center' }}>Cancel</button>
                         <button type="submit" className="btn-primary" disabled={loading} style={{ flex: 1, justifyContent: 'center' }}>
@@ -127,7 +121,7 @@ export default function SchedulesPage() {
 
     const modeIcon = (m: string) => ({ TTR: '⏱', SRS: '🌅', SST: '🌇', SWITCH: '🔘' })[m] ?? '📅'
     const modeLabel = (s: Schedule) =>
-        s.mode === 'TTR' ? `${s.trigAt?.slice(0,2)}:${s.trigAt?.slice(2,4)}` :
+        s.mode === 'TTR' ? `${s.trigAt?.slice(0, 2)}:${s.trigAt?.slice(2, 4)}` :
         s.mode === 'SRS' ? 'At Sunrise' :
         s.mode === 'SST' ? 'At Sunset' : 'Switch'
 
@@ -183,7 +177,6 @@ export default function SchedulesPage() {
                                 <th>Device</th>
                                 <th>Mode</th>
                                 <th>Trigger</th>
-                                <th>Relays</th>
                                 <th>Added</th>
                                 <th style={{ width: '80px' }}></th>
                             </tr>
@@ -201,9 +194,6 @@ export default function SchedulesPage() {
                                     </td>
                                     <td style={{ fontFamily: 'monospace', color: 'var(--text-primary)', fontWeight: 600 }}>
                                         {modeLabel(s)}
-                                    </td>
-                                    <td style={{ fontFamily: 'monospace', fontSize: '0.78rem' }}>
-                                        [{s.relays.join(', ')}]
                                     </td>
                                     <td style={{ fontSize: '0.78rem' }}>
                                         {new Date(s.createdAt).toLocaleDateString()}

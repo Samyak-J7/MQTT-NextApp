@@ -3,10 +3,7 @@ import bcrypt from 'bcryptjs'
 import { getUserByEmail, createUser } from '@/lib/dynamo'
 
 function generateId(): string {
-    // Use crypto.randomUUID if available, otherwise manual fallback
-    if (typeof crypto !== 'undefined' && crypto.randomUUID) {
-        return crypto.randomUUID()
-    }
+    if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID()
     return Math.random().toString(36).substring(2) + Date.now().toString(36)
 }
 
@@ -17,7 +14,6 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         if (!name || !email || !password) {
             return NextResponse.json({ error: 'All fields are required' }, { status: 400 })
         }
-
         if (password.length < 8) {
             return NextResponse.json({ error: 'Password must be at least 8 characters' }, { status: 400 })
         }
@@ -27,13 +23,16 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
             return NextResponse.json({ error: 'Email already registered' }, { status: 409 })
         }
 
+        const userId = generateId()
         const passwordHash = await bcrypt.hash(password, 12)
 
         await createUser({
-            userId: generateId(),
+            userId,
             email,
             name,
             passwordHash,
+            accountId: userId, // personal account — accountId = userId by default
+            role: 'owner',
             createdAt: Date.now(),
         })
 

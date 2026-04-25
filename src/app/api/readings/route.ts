@@ -1,12 +1,7 @@
-import {NextRequest, NextResponse} from 'next/server'
-import {z} from 'zod'
-import {DynamoDBClient} from '@aws-sdk/client-dynamodb'
-import {DynamoDBDocumentClient, PutCommand} from '@aws-sdk/lib-dynamodb'
-
-const SensorReadingSchema = z.object({
-    deviceId: z.string().min(3).max(100),
-    volume: z.number().min(0).max(10000)
-})
+import { NextRequest, NextResponse } from 'next/server'
+import { z } from 'zod'
+import { DynamoDBClient } from '@aws-sdk/client-dynamodb'
+import { DynamoDBDocumentClient, PutCommand } from '@aws-sdk/lib-dynamodb'
 
 const client = new DynamoDBClient({
     region: process.env.AWS_REGION,
@@ -17,42 +12,71 @@ const client = new DynamoDBClient({
 })
 const docClient = DynamoDBDocumentClient.from(client)
 
+const FbkItemSchema = z.discriminatedUnion('type', [
+    z.object({
+        device_id: z.string().min(1).max(100),
+        type: z.literal('oms'),
+        duration: z.number().min(0),
+    }),
+    z.object({
+        device_id: z.string().min(1).max(100),
+        type: z.literal('liquid_flow'),
+        duration: z.number().min(0),
+        consumption: z.number().min(0),
+    }),
+])
+
+const PayloadSchema = z.object({
+    fbk: z.array(FbkItemSchema).min(1),
+})
+
+function checkApiKey(req: NextRequest): boolean {
+    const key = process.env.BRIDGE_API_KEY
+    if (!key) return true // no key configured — open (dev mode)
+    const header = req.headers.get('authorization') ?? ''
+    return header === `Bearer ${key}`
+}
+
 export async function POST(req: NextRequest): Promise<NextResponse> {
-    try {
-        const json = await req.json().catch(() => null)
-        if (!json) {
-            return NextResponse.json(
-                {error: "Invalid JSON body"},
-                {status: 400}
-            )
-        }
-
-        const parsed = SensorReadingSchema.safeParse(json)
-        if (!parsed.success) {
-            return NextResponse.json(
-                {error: parsed.error.flatten()},
-                {status: 400}
-            )
-        }
-
-        const body = parsed.data
-        await docClient.send(
-            new PutCommand({
-                TableName: "SensorReadings",
-                Item: {
-                    deviceId: body.deviceId,
-                    timestamp: Date.now(),
-                    volume: body.volume,
-                },
-            })
-        )
-
-        return NextResponse.json({message: 'Saved'}, {status: 200})
-    } catch (error) {
-        console.error("Dynamo write failed:", error)
-        return NextResponse.json(
-            {error: "Internal server error"},
-            {status: 500}
-        )
+    if (!checkApiKey(req)) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
+
+    let json: unknown
+    try {
+        json = await req.json()
+    } catch {
+        return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
+    }
+
+    const parsed = PayloadSchema.safeParse(json)
+    if (!parsed.success) {
+        return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 })
+    }
+
+    const now = Date.now()
+    const results: { deviceId: string; status: 'saved' | 'error' }[] = []
+
+    for (const item of parsed.data.fbk) {
+        try {
+            await docClient.send(new PutCommand({
+                TableName: 'SensorReadings',
+                Item: {
+                    deviceId: item.device_id,
+                    timestamp: now,
+                    type: item.type,
+                    duration: item.duration,
+                    ...(item.type === 'liquid_flow' ? { consumption: item.consumption } : {}),
+                },
+            }))
+
+            results.push({ deviceId: item.device_id, status: 'saved' })
+        } catch (err) {
+            console.error(`Failed to save reading for ${item.device_id}:`, err)
+            results.push({ deviceId: item.device_id, status: 'error' })
+        }
+    }
+
+    const allSaved = results.every(r => r.status === 'saved')
+    return NextResponse.json({ results }, { status: allSaved ? 200 : 207 })
 }

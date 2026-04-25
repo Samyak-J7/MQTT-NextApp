@@ -59,10 +59,15 @@ export default function DashboardPage() {
     const [loading, setLoading] = useState(true)
 
     useEffect(() => {
-        fetch('/api/devices')
-            .then(r => r.json())
-            .then(d => setDevices(d.devices ?? []))
-            .finally(() => setLoading(false))
+        const load = () =>
+            fetch('/api/devices')
+                .then(r => r.json())
+                .then(d => setDevices(d.devices ?? []))
+                .finally(() => setLoading(false))
+
+        load()
+        const interval = setInterval(load, 20_000) // refresh live status every 20s
+        return () => clearInterval(interval)
     }, [])
 
     const online = devices.filter(d => d.lastSeen && Date.now() - d.lastSeen < 5 * 60 * 1000).length
