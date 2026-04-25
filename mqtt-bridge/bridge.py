@@ -21,7 +21,6 @@ import json
 import time
 import signal
 import logging
-import logging.handlers
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -81,28 +80,14 @@ HEALTH_FILE = Path("/tmp/bridge_healthy")
 VALID_TYPES = {"oms", "liquid_flow"}
 
 # ──────────────────────────────────────────────
-# Logging — daily rotation, keep 14 days
+# Logging — stdout only (captured by Docker / Fly)
 # ──────────────────────────────────────────────
-
-LOG_DIR = Path(__file__).parent / "logs"
-LOG_DIR.mkdir(exist_ok=True)
-
-_fmt = logging.Formatter(
-    fmt="%(asctime)s | %(levelname)-8s | %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S",
-)
-_file_handler = logging.handlers.TimedRotatingFileHandler(
-    LOG_DIR / "bridge.log", when="midnight", backupCount=14, encoding="utf-8",
-)
-_file_handler.setFormatter(_fmt)
-_file_handler.suffix = "%Y-%m-%d"
-
-_stdout_handler = logging.StreamHandler(sys.stdout)
-_stdout_handler.setFormatter(_fmt)
 
 logging.basicConfig(
     level=getattr(logging, LOG_LEVEL, logging.INFO),
-    handlers=[_stdout_handler, _file_handler],
+    stream=sys.stdout,
+    format="%(asctime)s | %(levelname)-8s | %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
 )
 log = logging.getLogger("mqtt-bridge")
 
