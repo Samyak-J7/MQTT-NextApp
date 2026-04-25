@@ -340,8 +340,25 @@ signal.signal(signal.SIGTERM, _shutdown)
 # ──────────────────────────────────────────────
 
 
+def _start_health_server() -> None:
+    """Tiny HTTP server so Railway/Fly health checks pass. Runs in a daemon thread."""
+    port = int(os.getenv("PORT", "8080"))
+    from http.server import BaseHTTPRequestHandler, HTTPServer
+    class _H(BaseHTTPRequestHandler):
+        def do_GET(self):
+            self.send_response(200)
+            self.end_headers()
+            self.wfile.write(b"ok")
+        def log_message(self, *_): pass  # silence access logs
+    import threading
+    threading.Thread(target=HTTPServer(("0.0.0.0", port), _H).serve_forever, daemon=True).start()
+    log.info("Health server listening on :%d", port)
+
+
 def main():
     global mqtt_client
+
+    _start_health_server()
 
     log.info("=" * 54)
     log.info("MQTT Bridge starting")
