@@ -4,7 +4,7 @@ import { getDevicesByAccount, putDevice, getHeartbeats } from '@/lib/dynamo'
 import { Device, DeviceType } from '@/app/types'
 import { logAction } from '@/lib/audit'
 
-const VALID_TYPES: DeviceType[] = ['oms', 'liquid_flow']
+const VALID_TYPES: DeviceType[] = ['oms', 'liquid_flow', 'power_meter']
 
 export async function GET(): Promise<NextResponse> {
     try {

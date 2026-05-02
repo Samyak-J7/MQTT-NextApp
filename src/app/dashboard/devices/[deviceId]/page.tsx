@@ -36,10 +36,10 @@ const ChartTooltip = ({ active, payload, label }: { active?: boolean; payload?: 
 function OmsCharts({ readings, range }: { readings: SensorReading[]; range: Range }) {
     const data = readings.map(r => ({
         time: fmtTs(r.timestamp, range),
-        duration_min: parseFloat((r.duration / 60).toFixed(1)),
+        duration_min: parseFloat(((r.duration ?? 0) / 60).toFixed(1)),
     }))
 
-    const totalMin = readings.reduce((s, r) => s + r.duration, 0) / 60
+    const totalMin = readings.reduce((s, r) => s + (r.duration ?? 0), 0) / 60
     const sessions = readings.length
 
     return (
@@ -81,8 +81,8 @@ function FlowCharts({ readings, range }: { readings: SensorReading[]; range: Ran
     let cumulative = 0
     const data = readings.map(r => {
         cumulative += r.consumption ?? 0
-        const rate = r.duration > 0 && r.consumption != null
-            ? parseFloat(((r.consumption / r.duration) * 3600).toFixed(2))
+        const rate = (r.duration ?? 0) > 0 && r.consumption != null
+            ? parseFloat(((r.consumption / (r.duration ?? 1)) * 3600).toFixed(2))
             : 0
         return {
             time: fmtTs(r.timestamp, range),
@@ -140,6 +140,101 @@ function FlowCharts({ readings, range }: { readings: SensorReading[]; range: Ran
                     <Tooltip content={<ChartTooltip />} />
                     <Line type="monotone" dataKey="cumulative" name="Cumulative (L)" stroke="#818cf8" strokeWidth={2} dot={false} />
                 </LineChart>
+            </ResponsiveContainer>
+        </div>
+    )
+}
+
+// ── Graphs: Power Meter ───────────────────────────────────────────────────────
+
+function PowerMeterCharts({ readings, range }: { readings: SensorReading[]; range: Range }) {
+    let cumKwh = 0
+    const data = readings.map(r => {
+        cumKwh += r.unit ?? 0
+        return {
+            time: fmtTs(r.timestamp, range),
+            watt:  parseFloat((r.watt  ?? 0).toFixed(1)),
+            volt:  parseFloat((r.volt  ?? 0).toFixed(1)),
+            ampr:  parseFloat((r.ampr  ?? 0).toFixed(2)),
+            pf:    parseFloat((r.pf    ?? 0).toFixed(2)),
+            frqc:  parseFloat((r.frqc  ?? 0).toFixed(1)),
+            unit:  parseFloat((r.unit  ?? 0).toFixed(3)),
+            cumKwh: parseFloat(cumKwh.toFixed(3)),
+        }
+    })
+
+    const latest = readings[readings.length - 1]
+    const totalKwh = readings.reduce((s, r) => s + (r.unit ?? 0), 0)
+    const avgWatt  = readings.length ? readings.reduce((s, r) => s + (r.watt ?? 0), 0) / readings.length : 0
+
+    const Stat = ({ label, value, color }: { label: string; value: string; color: string }) => (
+        <div>
+            <div className="text-[0.72rem] text-text-muted uppercase tracking-wider">{label}</div>
+            <div className="text-[1.3rem] font-extrabold" style={{ color }}>{value}</div>
+        </div>
+    )
+
+    return (
+        <div>
+            {/* Live snapshot */}
+            <div className="flex gap-5 mb-6 flex-wrap">
+                <Stat label="Voltage"      value={latest ? `${latest.volt?.toFixed(1)} V`  : '—'} color="#a78bfa" />
+                <Stat label="Current"      value={latest ? `${latest.ampr?.toFixed(2)} A`  : '—'} color="#a78bfa" />
+                <Stat label="Power"        value={latest ? `${latest.watt?.toFixed(1)} W`  : '—'} color="#f472b6" />
+                <Stat label="Power Factor" value={latest ? `${latest.pf?.toFixed(2)}`       : '—'} color="#a78bfa" />
+                <Stat label="Frequency"    value={latest ? `${latest.frqc?.toFixed(1)} Hz` : '—'} color="#a78bfa" />
+                <Stat label="Total Energy" value={`${totalKwh.toFixed(3)} kWh`}                    color="#34d399" />
+                <Stat label="Avg Power"    value={`${avgWatt.toFixed(1)} W`}                       color="#f472b6" />
+            </div>
+
+            {/* Power over time */}
+            <p className="text-xs text-text-muted m-0 mb-3">Power (W)</p>
+            <ResponsiveContainer width="100%" height={200}>
+                <AreaChart data={data} margin={{ top: 5, right: 10, left: -10, bottom: 0 }}>
+                    <defs>
+                        <linearGradient id="wattGrad" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%"  stopColor="#f472b6" stopOpacity={0.3} />
+                            <stop offset="95%" stopColor="#f472b6" stopOpacity={0} />
+                        </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+                    <XAxis dataKey="time" tick={{ fill: 'var(--text-muted)', fontSize: 11 }} axisLine={false} tickLine={false} />
+                    <YAxis tick={{ fill: 'var(--text-muted)', fontSize: 11 }} axisLine={false} tickLine={false} unit=" W" />
+                    <Tooltip content={<ChartTooltip />} />
+                    <Area type="monotone" dataKey="watt" name="Power (W)" stroke="#f472b6" strokeWidth={2} fill="url(#wattGrad)" />
+                </AreaChart>
+            </ResponsiveContainer>
+
+            {/* Voltage & Current */}
+            <p className="text-xs text-text-muted m-0 mt-5 mb-3">Voltage (V) &amp; Current (A)</p>
+            <ResponsiveContainer width="100%" height={200}>
+                <LineChart data={data} margin={{ top: 5, right: 10, left: -10, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+                    <XAxis dataKey="time" tick={{ fill: 'var(--text-muted)', fontSize: 11 }} axisLine={false} tickLine={false} />
+                    <YAxis yAxisId="v" tick={{ fill: 'var(--text-muted)', fontSize: 11 }} axisLine={false} tickLine={false} unit=" V" />
+                    <YAxis yAxisId="a" orientation="right" tick={{ fill: 'var(--text-muted)', fontSize: 11 }} axisLine={false} tickLine={false} unit=" A" />
+                    <Tooltip content={<ChartTooltip />} />
+                    <Line yAxisId="v" type="monotone" dataKey="volt" name="Voltage (V)" stroke="#a78bfa" strokeWidth={2} dot={false} />
+                    <Line yAxisId="a" type="monotone" dataKey="ampr" name="Current (A)" stroke="#22d3ee" strokeWidth={2} dot={false} />
+                </LineChart>
+            </ResponsiveContainer>
+
+            {/* Cumulative energy */}
+            <p className="text-xs text-text-muted m-0 mt-5 mb-3">Cumulative Energy (kWh)</p>
+            <ResponsiveContainer width="100%" height={160}>
+                <AreaChart data={data} margin={{ top: 5, right: 10, left: -10, bottom: 0 }}>
+                    <defs>
+                        <linearGradient id="kwhGrad" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%"  stopColor="#34d399" stopOpacity={0.3} />
+                            <stop offset="95%" stopColor="#34d399" stopOpacity={0} />
+                        </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+                    <XAxis dataKey="time" tick={{ fill: 'var(--text-muted)', fontSize: 11 }} axisLine={false} tickLine={false} />
+                    <YAxis tick={{ fill: 'var(--text-muted)', fontSize: 11 }} axisLine={false} tickLine={false} unit=" kWh" />
+                    <Tooltip content={<ChartTooltip />} />
+                    <Area type="monotone" dataKey="cumKwh" name="Cumulative (kWh)" stroke="#34d399" strokeWidth={2} fill="url(#kwhGrad)" />
+                </AreaChart>
             </ResponsiveContainer>
         </div>
     )
@@ -228,7 +323,7 @@ function ScheduleModal({ deviceId, onClose, onAdded }: {
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
-const TYPE_ACCENT: Record<DeviceType, string> = { oms: '#fbbf24', liquid_flow: '#22d3ee' }
+const TYPE_ACCENT: Record<DeviceType, string> = { oms: '#fbbf24', liquid_flow: '#22d3ee', power_meter: '#a78bfa' }
 
 export default function DeviceDetailPage() {
     const { deviceId } = useParams() as { deviceId: string }
@@ -357,7 +452,7 @@ export default function DeviceDetailPage() {
             <div className="glass-card p-5 mb-6">
                 <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
                     <h2 className="m-0 text-base font-bold text-text-primary">
-                        {device?.type === 'oms' ? 'Switch Activity' : 'Flow & Consumption'}
+                        {device?.type === 'oms' ? 'Switch Activity' : device?.type === 'liquid_flow' ? 'Flow & Consumption' : 'Power & Energy'}
                     </h2>
                     <div className="flex gap-1.5">
                         {(['24h', '7d', '30d'] as Range[]).map(r => (
@@ -382,8 +477,10 @@ export default function DeviceDetailPage() {
                     </div>
                 ) : device?.type === 'oms' ? (
                     <OmsCharts readings={readings} range={range} />
-                ) : (
+                ) : device?.type === 'liquid_flow' ? (
                     <FlowCharts readings={readings} range={range} />
+                ) : (
+                    <PowerMeterCharts readings={readings} range={range} />
                 )}
             </div>
 

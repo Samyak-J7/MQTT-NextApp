@@ -7,6 +7,7 @@ import Link from 'next/link'
 const TYPE_COLORS: Record<DeviceType, { bg: string; border: string; text: string; badge: string }> = {
     oms:          { bg: 'rgba(251,191,36,0.1)',  border: 'rgba(251,191,36,0.25)',  text: '#fbbf24', badge: 'OMS' },
     liquid_flow:  { bg: 'rgba(6,182,212,0.1)',   border: 'rgba(6,182,212,0.25)',   text: '#22d3ee', badge: 'Flow' },
+    power_meter:  { bg: 'rgba(167,139,250,0.1)', border: 'rgba(167,139,250,0.25)', text: '#a78bfa', badge: 'Power' },
 }
 
 const TYPE_ICON: Record<DeviceType, React.ReactNode> = {
@@ -19,6 +20,11 @@ const TYPE_ICON: Record<DeviceType, React.ReactNode> = {
     liquid_flow: (
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M12 2C6.5 11 2 15.4 2 17.5 2 20.5 6.7 23 12 23s10-2.5 10-5.5C22 15.4 17.5 11 12 2z"/>
+        </svg>
+    ),
+    power_meter: (
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
         </svg>
     ),
 }
@@ -181,6 +187,7 @@ function AddDeviceModal({ onClose, onAdded }: { onClose: () => void; onAdded: (d
                             >
                                 <option value="oms">⚡ On/Off Switch (OMS)</option>
                                 <option value="liquid_flow">💧 Liquid Flow Sensor</option>
+                                <option value="power_meter">🔌 Power / Energy Meter</option>
                             </select>
                         </div>
 
@@ -366,13 +373,13 @@ export default function DevicesPage() {
                     />
                 </div>
                 <div style={{ display: 'flex', gap: '0.5rem' }}>
-                    {(['all', 'oms', 'liquid_flow'] as const).map(t => (
+                    {(['all', 'oms', 'liquid_flow', 'power_meter'] as const).map(t => (
                         <button
                             key={t}
                             onClick={() => setTypeFilter(t)}
                             className={typeFilter === t ? 'btn-primary px-3 py-1.5 text-sm' : 'btn-ghost px-3 py-1.5 text-sm'}
                         >
-                            {t === 'all' ? 'All' : t === 'oms' ? '⚡ OMS' : '💧 Flow'}
+                            {t === 'all' ? 'All' : t === 'oms' ? '⚡ OMS' : t === 'liquid_flow' ? '💧 Flow' : '🔌 Power'}
                         </button>
                     ))}
                 </div>

@@ -77,7 +77,8 @@ STATS_INTERVAL = int(_optional("STATS_INTERVAL", "300"))
 HEARTBEAT_DEBOUNCE = int(_optional("HEARTBEAT_DEBOUNCE", "10"))
 
 HEALTH_FILE = Path("/tmp/bridge_healthy")
-VALID_TYPES = {"oms", "liquid_flow"}
+VALID_TYPES = {"oms", "liquid_flow", "power_meter"}
+POWER_METER_FIELDS = {"volt", "ampr", "watt", "unit", "frqc", "pf"}
 
 # ──────────────────────────────────────────────
 # Logging — stdout only (captured by Docker / Fly)
@@ -139,17 +140,36 @@ def _maybe_log_stats() -> None:
 # ──────────────────────────────────────────────
 
 
+def _normalise_item(item: dict) -> dict:
+    """Normalise field aliases and infer missing type before validation."""
+    item = dict(item)
+    # dev_id → device_id alias
+    if "dev_id" in item and "device_id" not in item:
+        item["device_id"] = item.pop("dev_id")
+    # infer power_meter from presence of electrical fields
+    if "type" not in item and POWER_METER_FIELDS.issubset(item.keys()):
+        item["type"] = "power_meter"
+    return item
+
+
 def _validate_item(item: object) -> tuple[bool, str]:
     if not isinstance(item, dict):
         return False, "not an object"
+    item = _normalise_item(item)
     if not isinstance(item.get("device_id"), str) or not item["device_id"].strip():
-        return False, "missing device_id"
-    if item.get("type") not in VALID_TYPES:
-        return False, f"invalid type '{item.get('type')}'"
+        return False, "missing device_id / dev_id"
+    item_type = item.get("type")
+    if item_type not in VALID_TYPES:
+        return False, f"invalid type '{item_type}'"
+    if item_type == "power_meter":
+        for f in POWER_METER_FIELDS:
+            if not isinstance(item.get(f), (int, float)):
+                return False, f"power_meter missing/invalid field '{f}'"
+        return True, ""
     dur = item.get("duration")
     if not isinstance(dur, (int, float)) or dur < 0:
         return False, "invalid duration"
-    if item["type"] == "liquid_flow":
+    if item_type == "liquid_flow":
         cons = item.get("consumption")
         if not isinstance(cons, (int, float)) or cons < 0:
             return False, "liquid_flow missing consumption"
@@ -174,7 +194,7 @@ def _handle_flow(topic: str, raw: str) -> None:
     for i, item in enumerate(fbk):
         ok, err = _validate_item(item)
         if ok:
-            valid.append(item)
+            valid.append(_normalise_item(item) if isinstance(item, dict) else item)
         else:
             log.warning("fbk[%d] skipped on [%s]: %s", i, topic, err)
             stats["readings_failed"] += 1

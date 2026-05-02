@@ -1,8 +1,9 @@
-export type DeviceType = 'oms' | 'liquid_flow'
+export type DeviceType = 'oms' | 'liquid_flow' | 'power_meter'
 
 export const DEVICE_TYPE_LABELS: Record<DeviceType, string> = {
     oms: 'On/Off Switch',
     liquid_flow: 'Liquid Flow Sensor',
+    power_meter: 'Power / Energy Meter',
 }
 
 export enum TriggerMode {
@@ -47,8 +48,16 @@ export interface SensorReading {
     deviceId: string
     timestamp: number
     type: DeviceType
-    duration: number
+    // oms / liquid_flow
+    duration?: number
     consumption?: number
+    // power_meter
+    volt?: number
+    ampr?: number
+    watt?: number
+    unit?: number   // kWh
+    frqc?: number
+    pf?: number
 }
 
 export interface AuditLog {
