@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { Device, Schedule, SensorReading, DeviceType, DEVICE_TYPE_LABELS } from '@/app/types'
 import { toast } from 'sonner'
@@ -8,6 +8,10 @@ import {
     XAxis, YAxis, CartesianGrid, Tooltip,
     ResponsiveContainer, LineChart, Line
 } from 'recharts'
+import {
+    Select, SelectContent, SelectItem,
+    SelectTrigger, SelectValue,
+} from '@/components/ui/select'
 
 type Range = '24h' | '7d' | '30d'
 
@@ -240,6 +244,363 @@ function PowerMeterCharts({ readings, range }: { readings: SensorReading[]; rang
     )
 }
 
+// ── OMS Control ───────────────────────────────────────────────────────────────
+
+// Dial geometry constants
+const D_CX = 110, D_CY = 110, D_R = 80, D_SVG = 220
+const D_START = 135   // lower-left in SVG coords (0°=right, clockwise)
+const D_SWEEP = 270   // total arc sweep (degrees)
+const D_MIN = 1_000          // ms — 1 second minimum
+const D_MAX = 3_600_000      // ms — 1 hour maximum
+const D_DEFAULT = 2_400      // ms
+const D_OFF = 100            // ms — OFF always sends 0.1 s
+
+const D_PRESETS = [
+    { label: '1 s',    value: 1_000 },
+    { label: '5 s',    value: 5_000 },
+    { label: '15 s',   value: 15_000 },
+    { label: '30 s',   value: 30_000 },
+    { label: '1 min',  value: 60_000 },
+    { label: '5 min',  value: 300_000 },
+    { label: '30 min', value: 1_800_000 },
+    { label: '1 hr',   value: 3_600_000 },
+]
+
+// Logarithmic scale gives fine control at low values, still reaches 1 hr
+const D_LOG_MIN = Math.log(D_MIN)
+const D_LOG_MAX = Math.log(D_MAX)
+
+function dRad(deg: number) { return (deg * Math.PI) / 180 }
+
+function dPt(angle: number, r = D_R): [number, number] {
+    return [D_CX + r * Math.cos(dRad(angle)), D_CY + r * Math.sin(dRad(angle))]
+}
+
+function dArc(a1: number, a2: number, r = D_R): string {
+    const [sx, sy] = dPt(a1, r)
+    const [ex, ey] = dPt(a2, r)
+    const sweep = a2 - a1
+    if (sweep < 0.5) return ''
+    return `M ${sx} ${sy} A ${r} ${r} 0 ${sweep > 180 ? 1 : 0} 1 ${ex} ${ey}`
+}
+
+function valToAngle(v: number): number {
+    const clamped = Math.max(D_MIN, Math.min(D_MAX, v))
+    return D_START + ((Math.log(clamped) - D_LOG_MIN) / (D_LOG_MAX - D_LOG_MIN)) * D_SWEEP
+}
+
+function mouseToDialAngle(rect: DOMRect, clientX: number, clientY: number): number {
+    const scaleX = D_SVG / rect.width
+    const scaleY = D_SVG / rect.height
+    const svgX = (clientX - rect.left) * scaleX
+    const svgY = (clientY - rect.top) * scaleY
+    let angle = Math.atan2(svgY - D_CY, svgX - D_CX) * (180 / Math.PI)
+    if (angle < 0) angle += 360
+    if (angle >= D_START) return angle
+    if (angle < D_START - D_SWEEP + 360) return angle + 360
+    return angle < 90 ? D_START + D_SWEEP : D_START
+}
+
+function dialAngleToVal(a: number): number {
+    const logV = D_LOG_MIN + ((a - D_START) / D_SWEEP) * (D_LOG_MAX - D_LOG_MIN)
+    return Math.round(Math.exp(logV))
+}
+
+function fmtMs(ms: number): string {
+    if (ms < 60_000)      return `${parseFloat((ms / 1000).toFixed(1))} s`
+    if (ms < 3_600_000)   return `${parseFloat((ms / 60_000).toFixed(1))} min`
+    return `${parseFloat((ms / 3_600_000).toFixed(1))} hr`
+}
+
+type DurUnit = 's' | 'min' | 'hr'
+const UNIT_MULT: Record<DurUnit, number> = { s: 1_000, min: 60_000, hr: 3_600_000 }
+
+function OmsControl({ deviceId, initialDuration }: { deviceId: string; initialDuration?: number }) {
+    const [duration, setDuration] = useState(initialDuration ?? D_DEFAULT)
+    const [unit, setUnit] = useState<DurUnit>('s')
+    const [isDragging, setIsDragging] = useState(false)
+    const [sending, setSending] = useState<'on' | 'off' | null>(null)
+    const [lastCmd, setLastCmd] = useState<{ type: 'on' | 'off'; ms: number; at: number } | null>(null)
+    const svgRef = useRef<SVGSVGElement>(null)
+    const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+    const synced = useRef(false)
+
+    // Sync once when the device loads (initialDuration comes in async)
+    useEffect(() => {
+        if (!synced.current && initialDuration !== undefined) {
+            synced.current = true
+            setDuration(initialDuration) // plain setDuration — no PATCH
+        }
+    }, [initialDuration])
+
+    // All user-initiated changes: update state + debounce-save to DynamoDB
+    const updateDuration = useCallback((ms: number) => {
+        const clamped = Math.max(D_MIN, Math.min(D_MAX, ms))
+        setDuration(clamped)
+        if (saveTimer.current) clearTimeout(saveTimer.current)
+        saveTimer.current = setTimeout(() => {
+            fetch(`/api/devices/${deviceId}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ defaultDuration: clamped }),
+            }).catch(err => console.error('[oms] save defaultDuration:', err))
+        }, 800)
+    }, [deviceId])
+
+    useEffect(() => {
+        if (!isDragging) return
+        const onMove = (clientX: number, clientY: number) => {
+            if (!svgRef.current) return
+            const a = mouseToDialAngle(svgRef.current.getBoundingClientRect(), clientX, clientY)
+            updateDuration(dialAngleToVal(a))
+        }
+        const onMouseMove = (e: MouseEvent) => onMove(e.clientX, e.clientY)
+        const onTouchMove = (e: TouchEvent) => { e.preventDefault(); onMove(e.touches[0].clientX, e.touches[0].clientY) }
+        const onEnd = () => setIsDragging(false)
+        document.addEventListener('mousemove', onMouseMove)
+        document.addEventListener('mouseup', onEnd)
+        document.addEventListener('touchmove', onTouchMove, { passive: false })
+        document.addEventListener('touchend', onEnd)
+        return () => {
+            document.removeEventListener('mousemove', onMouseMove)
+            document.removeEventListener('mouseup', onEnd)
+            document.removeEventListener('touchmove', onTouchMove)
+            document.removeEventListener('touchend', onEnd)
+        }
+    }, [isDragging, updateDuration])
+
+    const sendCommand = async (ms: number, type: 'on' | 'off') => {
+        setSending(type)
+        try {
+            const res = await fetch(`/api/devices/${deviceId}/control`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ duration: ms }),
+            })
+            const data = await res.json()
+            if (!res.ok) throw new Error(data.error)
+            toast.success(type === 'on' ? `ON — ${fmtMs(ms)}` : 'Switch OFF')
+            setLastCmd({ type, ms, at: Date.now() })
+        } catch (err) {
+            toast.error(err instanceof Error ? err.message : 'Failed to send command')
+        } finally {
+            setSending(null)
+        }
+    }
+
+    // Derived display value in current unit (no trailing zeros)
+    const displayVal = parseFloat((duration / UNIT_MULT[unit]).toFixed(2)).toString()
+
+    const currentAngle = valToAngle(duration)
+    const [hx, hy] = dPt(currentAngle)
+    const trackPath = dArc(D_START, D_START + D_SWEEP)
+    const fillPath  = dArc(D_START, currentAngle)
+    const isActive  = !!sending
+
+    return (
+        <div className="glass-card p-5 mb-6">
+            <div className="flex items-center justify-between mb-5 flex-wrap gap-2">
+                <h2 className="m-0 text-base font-bold text-text-primary">Switch Control</h2>
+                {lastCmd && (
+                    <span className="text-[0.73rem] text-text-muted">
+                        Last:{' '}
+                        <span style={{ color: lastCmd.type === 'on' ? '#fbbf24' : '#94a3b8' }}>
+                            {lastCmd.type === 'on' ? `ON (${fmtMs(lastCmd.ms)})` : 'OFF'}
+                        </span>
+                        {' '}· {new Date(lastCmd.at).toLocaleTimeString()}
+                    </span>
+                )}
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-6 items-center sm:items-start">
+
+                {/* ── Arc Dial ── */}
+                <div className="flex flex-col items-center gap-1 flex-shrink-0">
+                    <svg
+                        ref={svgRef}
+                        width={D_SVG}
+                        height={D_SVG}
+                        viewBox={`0 0 ${D_SVG} ${D_SVG}`}
+                        style={{ touchAction: 'none', cursor: isDragging ? 'grabbing' : 'default', userSelect: 'none' }}
+                    >
+                        <defs>
+                            <filter id="omsglow" x="-50%" y="-50%" width="200%" height="200%">
+                                <feGaussianBlur stdDeviation="3.5" result="blur" />
+                                <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
+                            </filter>
+                            <radialGradient id="centerglow" cx="50%" cy="50%" r="50%">
+                                <stop offset="0%"   stopColor="#fbbf24" stopOpacity="0.18" />
+                                <stop offset="100%" stopColor="#fbbf24" stopOpacity="0" />
+                            </radialGradient>
+                        </defs>
+
+                        <circle cx={D_CX} cy={D_CY} r={D_R + 14}
+                            fill="none" stroke="rgba(251,191,36,0.05)" strokeWidth={1} />
+
+                        <path d={trackPath} fill="none"
+                            stroke="rgba(251,191,36,0.13)" strokeWidth={11} strokeLinecap="round" />
+
+                        {fillPath && (
+                            <path d={fillPath} fill="none"
+                                stroke="#fbbf24" strokeWidth={11} strokeLinecap="round"
+                                opacity={0.88} filter="url(#omsglow)" />
+                        )}
+
+                        <circle cx={D_CX} cy={D_CY} r={D_R - 18} fill="url(#centerglow)" />
+
+                        <circle cx={D_CX} cy={D_CY} r={44}
+                            fill={sending === 'on' ? 'rgba(251,191,36,0.2)' : 'rgba(251,191,36,0.07)'}
+                            stroke={sending === 'on' ? 'rgba(251,191,36,0.6)' : 'rgba(251,191,36,0.25)'}
+                            strokeWidth={1.5}
+                            style={{ cursor: isActive ? 'not-allowed' : 'pointer', transition: 'fill 0.15s, stroke 0.15s' }}
+                            onClick={() => !isActive && sendCommand(duration, 'on')}
+                        />
+                        <text x={D_CX} y={D_CY - 10} textAnchor="middle"
+                            fill={sending === 'on' ? '#fde68a' : '#fbbf24'}
+                            fontSize={15} fontWeight="800" letterSpacing="1"
+                            style={{ pointerEvents: 'none' }}>
+                            {sending === 'on' ? '···' : 'ON'}
+                        </text>
+                        <text x={D_CX} y={D_CY + 9} textAnchor="middle"
+                            fill="rgba(251,191,36,0.65)" fontSize={10.5} fontWeight="500"
+                            style={{ pointerEvents: 'none' }}>
+                            {fmtMs(duration)}
+                        </text>
+
+                        <circle cx={hx} cy={hy} r={11}
+                            fill="#1a1a2e" stroke="#fbbf24" strokeWidth={2.5}
+                            filter="url(#omsglow)"
+                            style={{ cursor: isDragging ? 'grabbing' : 'grab' }}
+                            onMouseDown={e => { e.preventDefault(); setIsDragging(true) }}
+                            onTouchStart={() => setIsDragging(true)}
+                        />
+                        <circle cx={hx} cy={hy} r={4} fill="#fbbf24"
+                            style={{ pointerEvents: 'none' }} />
+                    </svg>
+                    <p className="text-[0.72rem] text-text-muted -mt-1">Drag handle to set duration</p>
+                </div>
+
+                {/* ── Right panel ── */}
+                <div className="flex-1 flex flex-col gap-5 w-full">
+
+                    {/* Presets */}
+                    <div>
+                        <p className="text-[0.72rem] text-text-muted uppercase tracking-wider mb-2 font-medium">
+                            Quick Presets
+                        </p>
+                        <div className="flex flex-wrap gap-2">
+                            {D_PRESETS.map(p => (
+                                <button
+                                    key={p.value}
+                                    onClick={() => updateDuration(p.value)}
+                                    className="px-3 py-1.5 rounded-lg text-[0.78rem] font-semibold border transition-all"
+                                    style={duration === p.value ? {
+                                        background: 'rgba(251,191,36,0.15)',
+                                        borderColor: 'rgba(251,191,36,0.5)',
+                                        color: '#fbbf24',
+                                    } : {
+                                        background: 'transparent',
+                                        borderColor: 'rgba(255,255,255,0.1)',
+                                        color: 'var(--text-secondary)',
+                                    }}
+                                >
+                                    {p.label}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+
+                    {/* Human-friendly duration input */}
+                    <div>
+                        <p className="text-[0.72rem] text-text-muted uppercase tracking-wider mb-2 font-medium">
+                            Custom Duration
+                        </p>
+                        <div className="flex gap-2 items-center">
+                            <input
+                                type="number"
+                                min={0}
+                                step="any"
+                                value={displayVal}
+                                onChange={e => {
+                                    const num = parseFloat(e.target.value)
+                                    if (!isNaN(num) && num > 0) {
+                                        updateDuration(Math.round(num * UNIT_MULT[unit]))
+                                    }
+                                }}
+                                className="input-dark w-28 text-sm"
+                                style={{ padding: '10px 14px' }}
+                            />
+                            <Select value={unit} onValueChange={v => setUnit(v as DurUnit)}>
+                                <SelectTrigger
+                                    className="w-[100px] rounded-xl border text-sm font-medium focus:ring-1"
+                                    style={{
+                                        height: '42px',
+                                        background: 'var(--bg-card)',
+                                        borderColor: 'var(--border-light)',
+                                        color: 'var(--text-primary)',
+                                    }}
+                                >
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent
+                                    className="rounded-xl border text-sm"
+                                    style={{
+                                        background: 'var(--bg-card)',
+                                        borderColor: 'var(--border-light)',
+                                        color: 'var(--text-primary)',
+                                    }}
+                                >
+                                    {([
+                                        { value: 's',   label: 'Seconds' },
+                                        { value: 'min', label: 'Minutes' },
+                                        { value: 'hr',  label: 'Hours'   },
+                                    ] as { value: DurUnit; label: string }[]).map(o => (
+                                        <SelectItem
+                                            key={o.value}
+                                            value={o.value}
+                                            className="rounded-lg text-sm cursor-pointer focus:bg-[rgba(251,191,36,0.1)] focus:text-[#fbbf24] data-[state=checked]:text-[#fbbf24]"
+                                        >
+                                            {o.label}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    </div>
+
+                    {/* ON button */}
+                    <button
+                        onClick={() => !isActive && sendCommand(duration, 'on')}
+                        disabled={isActive}
+                        className="py-3 rounded-xl font-bold text-sm transition-all disabled:opacity-50"
+                        style={{
+                            background: 'rgba(251,191,36,0.12)',
+                            border: '1px solid rgba(251,191,36,0.35)',
+                            color: '#fbbf24',
+                        }}
+                    >
+                        {sending === 'on' ? 'Turning ON…' : `⚡ ON — ${fmtMs(duration)}`}
+                    </button>
+
+                    {/* OFF button */}
+                    <button
+                        onClick={() => !isActive && sendCommand(D_OFF, 'off')}
+                        disabled={isActive}
+                        className="py-3 rounded-xl font-bold text-sm transition-all disabled:opacity-50"
+                        style={{
+                            background: 'rgba(239,68,68,0.08)',
+                            border: '1px solid rgba(239,68,68,0.28)',
+                            color: '#f87171',
+                        }}
+                    >
+                        {sending === 'off' ? 'Turning Off…' : '⏻  OFF'}
+                    </button>
+                </div>
+            </div>
+        </div>
+    )
+}
+
 // ── Schedule Modal ────────────────────────────────────────────────────────────
 
 function ScheduleModal({ deviceId, onClose, onAdded }: {
@@ -447,6 +808,11 @@ export default function DeviceDetailPage() {
                     ))}
                 </div>
             </div>
+
+            {/* OMS Switch Control */}
+            {device?.type === 'oms' && (
+                <OmsControl deviceId={deviceId} initialDuration={device.defaultDuration} />
+            )}
 
             {/* Charts */}
             <div className="glass-card p-5 mb-6">

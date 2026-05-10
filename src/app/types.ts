@@ -33,6 +33,7 @@ export interface Device {
     addedBy: string
     createdAt: number
     lastSeen?: number
+    defaultDuration?: number   // ms — OMS switch default ON duration
     schedules?: Schedule[]
 }
 

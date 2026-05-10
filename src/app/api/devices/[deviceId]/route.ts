@@ -24,12 +24,13 @@ export async function PATCH(req: NextRequest, { params }: RouteParams): Promise<
     const device = await getDevice(session.user.accountId, deviceId)
     if (!device) return NextResponse.json({ error: 'Device not found' }, { status: 404 })
 
-    const { name, location, description } = await req.json()
+    const { name, location, description, defaultDuration } = await req.json()
     const updated = {
         ...device,
         ...(name ? { name } : {}),
         ...(location !== undefined ? { location } : {}),
         ...(description !== undefined ? { description } : {}),
+        ...(typeof defaultDuration === 'number' ? { defaultDuration } : {}),
     }
 
     await putDevice(updated)

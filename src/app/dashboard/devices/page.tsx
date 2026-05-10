@@ -232,10 +232,39 @@ function AddDeviceModal({ onClose, onAdded }: { onClose: () => void; onAdded: (d
 
 // ── Device Card ───────────────────────────────────────────────────────────────
 
+function fmtDur(ms: number): string {
+    if (ms < 60_000)    return `${parseFloat((ms / 1_000).toFixed(1))} s`
+    if (ms < 3_600_000) return `${parseFloat((ms / 60_000).toFixed(1))} min`
+    return `${parseFloat((ms / 3_600_000).toFixed(1))} hr`
+}
+
 function DeviceCard({ device, onDelete }: { device: Device; onDelete: (id: string) => void }) {
     const isOnline = device.lastSeen ? Date.now() - device.lastSeen < 5 * 60 * 1000 : false
     const [deleting, setDeleting] = useState(false)
+    const [switching, setSwitching] = useState<'on' | 'off' | null>(null)
     const colors = TYPE_COLORS[device.type] ?? TYPE_COLORS.oms
+
+    const handleSwitch = async (e: React.MouseEvent, type: 'on' | 'off') => {
+        e.preventDefault()
+        e.stopPropagation()
+        if (switching) return
+        const duration = type === 'on' ? (device.defaultDuration ?? 2_400) : 100
+        setSwitching(type)
+        try {
+            const res = await fetch(`/api/devices/${device.deviceId}/control`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ duration }),
+            })
+            const data = await res.json()
+            if (!res.ok) throw new Error(data.error)
+            toast.success(type === 'on' ? `⚡ ON — ${fmtDur(duration)}` : '⏻ Switch OFF')
+        } catch (err) {
+            toast.error(err instanceof Error ? err.message : 'Failed to send command')
+        } finally {
+            setSwitching(null)
+        }
+    }
 
     const handleDelete = async (e: React.MouseEvent) => {
         e.preventDefault()
@@ -254,11 +283,15 @@ function DeviceCard({ device, onDelete }: { device: Device; onDelete: (id: strin
     }
 
     return (
-        <Link href={`/dashboard/devices/${device.deviceId}`} style={{ textDecoration: 'none' }}>
-            <div className="glass-card glass-card-hover" style={{ padding: '1.25rem', cursor: 'pointer' }}>
+        <Link href={`/dashboard/devices/${device.deviceId}`} style={{ textDecoration: 'none', height: '100%' }}>
+            <div className="glass-card glass-card-hover" style={{
+                padding: '1.25rem', cursor: 'pointer',
+                display: 'flex', flexDirection: 'column', height: '100%', minHeight: '200px',
+            }}>
+                {/* Header row */}
                 <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '1rem' }}>
                     <div style={{
-                        width: '44px', height: '44px', borderRadius: '12px',
+                        width: '44px', height: '44px', borderRadius: '12px', flexShrink: 0,
                         background: colors.bg, border: `1px solid ${colors.border}`,
                         display: 'flex', alignItems: 'center', justifyContent: 'center', color: colors.text,
                     }}>
@@ -269,27 +302,69 @@ function DeviceCard({ device, onDelete }: { device: Device; onDelete: (id: strin
                     </span>
                 </div>
 
-                <h3 style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--text-primary)', margin: '0 0 0.25rem' }}>
-                    {device.name}
-                </h3>
-                <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontFamily: 'monospace', margin: '0 0 0.375rem' }}>
-                    {device.deviceId}
-                </p>
-                <span style={{
-                    display: 'inline-block', fontSize: '0.68rem', fontWeight: 600,
-                    color: colors.text, background: colors.bg, border: `1px solid ${colors.border}`,
-                    borderRadius: '6px', padding: '1px 7px', marginBottom: '0.625rem',
-                }}>
-                    {DEVICE_TYPE_LABELS[device.type]}
-                </span>
-
-                {device.location && (
-                    <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', margin: '0 0 0.75rem' }}>
-                        📍 {device.location}
+                {/* Body — grows to fill space so footer stays at bottom */}
+                <div style={{ flex: 1 }}>
+                    <h3 style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--text-primary)', margin: '0 0 0.25rem' }}>
+                        {device.name}
+                    </h3>
+                    <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontFamily: 'monospace', margin: '0 0 0.375rem' }}>
+                        {device.deviceId}
                     </p>
+                    <span style={{
+                        display: 'inline-block', fontSize: '0.68rem', fontWeight: 600,
+                        color: colors.text, background: colors.bg, border: `1px solid ${colors.border}`,
+                        borderRadius: '6px', padding: '1px 7px', marginBottom: '0.5rem',
+                    }}>
+                        {DEVICE_TYPE_LABELS[device.type]}
+                    </span>
+
+                    {device.location && (
+                        <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', margin: '0.25rem 0 0' }}>
+                            📍 {device.location}
+                        </p>
+                    )}
+                </div>
+
+                {/* Quick ON/OFF — OMS only */}
+                {device.type === 'oms' && (
+                    <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.875rem' }} onClick={e => e.preventDefault()}>
+                        <button
+                            onClick={e => handleSwitch(e, 'on')}
+                            disabled={!!switching}
+                            style={{
+                                flex: 1, padding: '0.45rem 0',
+                                borderRadius: '10px', fontSize: '0.75rem', fontWeight: 700,
+                                border: '1px solid rgba(251,191,36,0.35)',
+                                background: switching === 'on' ? 'rgba(251,191,36,0.25)' : 'rgba(251,191,36,0.1)',
+                                color: '#fbbf24', cursor: switching ? 'not-allowed' : 'pointer',
+                                transition: 'background 0.15s',
+                                opacity: switching && switching !== 'on' ? 0.5 : 1,
+                            }}
+                        >
+                            {switching === 'on'
+                                ? '···'
+                                : `⚡ ON${device.defaultDuration ? ` · ${fmtDur(device.defaultDuration)}` : ''}`}
+                        </button>
+                        <button
+                            onClick={e => handleSwitch(e, 'off')}
+                            disabled={!!switching}
+                            style={{
+                                flex: 1, padding: '0.45rem 0',
+                                borderRadius: '10px', fontSize: '0.75rem', fontWeight: 700,
+                                border: '1px solid rgba(239,68,68,0.28)',
+                                background: switching === 'off' ? 'rgba(239,68,68,0.2)' : 'rgba(239,68,68,0.07)',
+                                color: '#f87171', cursor: switching ? 'not-allowed' : 'pointer',
+                                transition: 'background 0.15s',
+                                opacity: switching && switching !== 'off' ? 0.5 : 1,
+                            }}
+                        >
+                            {switching === 'off' ? '···' : '⏻ OFF'}
+                        </button>
+                    </div>
                 )}
 
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: '0.75rem', borderTop: '1px solid var(--border)' }}>
+                {/* Footer — always at bottom */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: '0.75rem', marginTop: '0.75rem', borderTop: '1px solid var(--border)' }}>
                     <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
                         {(device.schedules ?? []).length} schedule{(device.schedules ?? []).length !== 1 ? 's' : ''}
                     </span>
@@ -402,7 +477,7 @@ export default function DevicesPage() {
                     )}
                 </div>
             ) : (
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '1rem' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '1rem', alignItems: 'stretch' }}>
                     {filtered.map(d => (
                         <DeviceCard key={d.deviceId} device={d} onDelete={id => setDevices(ds => ds.filter(x => x.deviceId !== id))} />
                     ))}
