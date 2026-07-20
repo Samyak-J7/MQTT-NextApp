@@ -163,12 +163,22 @@ def _maybe_log_stats() -> None:
 # ──────────────────────────────────────────────
 
 
+def _clean_device_id(raw_id: str) -> str:
+    """Strip any trailing '~[...]' state/array suffix some firmware appends
+    to device ids, e.g. 'pit_oms_e6614864d3496f34~[7,0,0,0]' → 'pit_oms_e6614864d3496f34'.
+    Left uncleaned, the suffixed id gets stored as a different device than
+    the one registered on the dashboard, so it never shows as online."""
+    return raw_id.split("~", 1)[0].strip()
+
+
 def _normalise_item(item: dict) -> dict:
     """Normalise field aliases and infer missing type before validation."""
     item = dict(item)
     # dev_id → device_id alias
     if "dev_id" in item and "device_id" not in item:
         item["device_id"] = item.pop("dev_id")
+    if isinstance(item.get("device_id"), str):
+        item["device_id"] = _clean_device_id(item["device_id"])
     # infer power_meter from presence of electrical fields
     if "type" not in item and POWER_METER_FIELDS.issubset(item.keys()):
         item["type"] = "power_meter"
@@ -256,7 +266,7 @@ def _extract_device_id(raw: str) -> str | None:
     raw = raw.strip()
     # plain string
     if not raw.startswith("{"):
-        return raw.strip('"') or None
+        return _clean_device_id(raw.strip('"')) or None
     try:
         data = json.loads(raw)
     except json.JSONDecodeError:
@@ -265,7 +275,7 @@ def _extract_device_id(raw: str) -> str | None:
     for field in (STATUS_DEVICE_ID_FIELD, "device_id", "id", "deviceId", "dev_id"):
         val = data.get(field)
         if isinstance(val, str) and val.strip():
-            return val.strip()
+            return _clean_device_id(val.strip()) or None
     return None
 
 
