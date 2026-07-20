@@ -8,7 +8,6 @@ export const DEVICE_TYPE_LABELS: Record<DeviceType, string> = {
 
 export enum TriggerMode {
     TTR = 'Time Trigger',
-    SWITCH = 'Switch',
     SRS = 'Sunrise',
     SST = 'Sunset',
 }
@@ -39,8 +38,11 @@ export interface Device {
 
 export interface Schedule {
     scheduleId: string
-    mode: string
-    trigAt: string
+    mode: string        // TTR | SRS | SST
+    trigAt: string       // HHMM, used by TTR only
+    duration: number      // minutes the device stays ON before auto-off
+    lat?: number          // required for SRS/SST
+    lon?: number          // required for SRS/SST
     enabled: boolean
     createdAt: number
 }

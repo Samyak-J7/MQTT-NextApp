@@ -13,6 +13,13 @@ Status ping payload (any of these are accepted):
 Flow payload:
   {"fbk": [{"device_id": "DEV-001", "type": "oms", "duration": 3600}]}
   {"fbk": [{"device_id": "DEV-002", "type": "liquid_flow", "duration": 3600, "consumption": 142.5}]}
+
+Scheduling:
+  Fetches enabled TTR/SRS/SST schedules from GET {API_URL}/schedules/all and
+  sleeps exactly until the next one is due, firing rly0=<seconds> to
+  MQTT_OMS_TOPIC (same contract as the dashboard's manual Quick On control).
+  POST /refresh-schedules (on the health-check HTTP server) wakes the
+  scheduler immediately when the dashboard adds/removes a schedule.
 """
 
 import os
@@ -21,8 +28,10 @@ import json
 import time
 import signal
 import logging
-from datetime import datetime, timezone
+import threading
+from datetime import datetime, timezone, timedelta
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 import paho.mqtt.client as mqtt
 import requests
@@ -63,9 +72,10 @@ MQTT_STATUS_TOPIC = _optional("MQTT_STATUS_TOPIC", "pit_fbk")
 # Field name used in status pings to carry the device id
 STATUS_DEVICE_ID_FIELD = _optional("STATUS_DEVICE_ID_FIELD", "device_id")
 
-_api_base     = _require("API_URL").rstrip("/")
-READINGS_URL  = f"{_api_base}/readings"
-HEARTBEAT_URL = f"{_api_base}/heartbeat"
+_api_base      = _require("API_URL").rstrip("/")
+READINGS_URL   = f"{_api_base}/readings"
+HEARTBEAT_URL  = f"{_api_base}/heartbeat"
+SCHEDULES_URL  = f"{_api_base}/schedules/all"
 
 API_KEY = _optional("BRIDGE_API_KEY")
 
@@ -75,6 +85,19 @@ STATS_INTERVAL = int(_optional("STATS_INTERVAL", "300"))
 # Debounce: only forward a heartbeat for a device if this many seconds have
 # passed since the last one. Keeps API calls low when devices ping every 15s.
 HEARTBEAT_DEBOUNCE = int(_optional("HEARTBEAT_DEBOUNCE", "10"))
+
+# Schedule firing — same topic/payload contract as the dashboard's manual
+# "Quick On" control (src/app/api/devices/[deviceId]/control/route.ts):
+# publishing rly0=<seconds> makes the device turn on and auto-off itself.
+MQTT_OMS_TOPIC = _optional("MQTT_OMS_TOPIC", "pit_oms_g2one")
+
+# TTR trigAt (HH:MM) is entered in this timezone by the dashboard; SRS/SST
+# sunrise/sunset are computed in UTC directly from lat/lon so this doesn't
+# affect them.
+SCHEDULE_TZ = ZoneInfo(_optional("SCHEDULE_TZ", "Asia/Kolkata"))
+
+# Fallback re-sync if a webhook push from the dashboard is ever missed.
+SCHEDULE_REFRESH_INTERVAL = int(_optional("SCHEDULE_REFRESH_INTERVAL", "600"))
 
 HEALTH_FILE = Path("/tmp/bridge_healthy")
 VALID_TYPES = {"oms", "liquid_flow", "power_meter"}
@@ -276,17 +299,149 @@ def _handle_status(topic: str, raw: str) -> None:
         log.error("[status] heartbeat API failed for %s: %s", device_id, exc)
 
 # ──────────────────────────────────────────────
+# Scheduler — exact-timer firing of TTR/SRS/SST schedules.
+# No polling loop: sleeps precisely until the earliest upcoming trigger and
+# wakes early (via _schedule_refresh_event) whenever the dashboard notifies
+# us a schedule changed, so a newly-added schedule can never be delayed by
+# a stale sleep.
+# ──────────────────────────────────────────────
+
+_schedules: list[dict] = []
+_schedule_lock = threading.Lock()
+_schedule_refresh_event = threading.Event()
+_last_schedule_fetch = 0.0
+
+
+def _fetch_schedules() -> None:
+    global _schedules, _last_schedule_fetch
+    try:
+        resp = _http.get(SCHEDULES_URL, headers=_api_headers(), timeout=10)
+        resp.raise_for_status()
+        data = resp.json().get("schedules", [])
+        with _schedule_lock:
+            _schedules = [s for s in data if s.get("mode") in ("TTR", "SRS", "SST")]
+        _last_schedule_fetch = time.monotonic()
+        log.info("Schedules synced: %d active", len(_schedules))
+    except requests.RequestException as exc:
+        log.error("Failed to fetch schedules: %s", exc)
+
+
+def _next_ttr(trig_at: str, now_utc: datetime) -> datetime | None:
+    try:
+        hh, mm = int(trig_at[:2]), int(trig_at[2:4])
+    except (ValueError, IndexError):
+        return None
+    now_local = now_utc.astimezone(SCHEDULE_TZ)
+    candidate = now_local.replace(hour=hh, minute=mm, second=0, microsecond=0)
+    if candidate <= now_local:
+        candidate += timedelta(days=1)
+    return candidate.astimezone(timezone.utc)
+
+
+def _next_sun(mode: str, lat: float, lon: float, now_utc: datetime) -> datetime | None:
+    try:
+        from astral import LocationInfo
+        from astral.sun import sun
+    except ImportError:
+        log.error("astral not installed — SRS/SST schedules disabled")
+        return None
+    observer = LocationInfo(latitude=lat, longitude=lon).observer
+    key = "sunrise" if mode == "SRS" else "sunset"
+    for day_offset in (0, 1):
+        d = (now_utc + timedelta(days=day_offset)).date()
+        try:
+            candidate = sun(observer, date=d, tzinfo=timezone.utc)[key]
+        except Exception as exc:  # astral raises on polar day/night edge cases
+            log.warning("Sun calc failed for %s on %s: %s", mode, d, exc)
+            continue
+        if candidate > now_utc:
+            return candidate
+    return None
+
+
+def _compute_next_fire(schedule: dict, now_utc: datetime) -> datetime | None:
+    mode = schedule.get("mode")
+    if mode == "TTR":
+        return _next_ttr(schedule.get("trigAt", "0000"), now_utc)
+    if mode in ("SRS", "SST"):
+        lat, lon = schedule.get("lat"), schedule.get("lon")
+        if lat is None or lon is None:
+            return None
+        return _next_sun(mode, lat, lon, now_utc)
+    return None
+
+
+def _fire_schedule(schedule: dict) -> None:
+    device_id = schedule.get("deviceId")
+    duration_min = schedule.get("duration", 0)
+    payload = {"dev_id": device_id, "rly0": duration_min * 60}
+
+    if not mqtt_client or not mqtt_client.is_connected():
+        log.error("[schedule] MQTT not connected — dropped fire for %s", device_id)
+        return
+    try:
+        mqtt_client.publish(MQTT_OMS_TOPIC, json.dumps(payload), qos=1)
+        log.info("[schedule] fired %s on %s → rly0=%ds", schedule.get("scheduleId"), device_id, duration_min * 60)
+    except Exception as exc:
+        log.error("[schedule] publish failed for %s: %s", device_id, exc)
+
+
+def _scheduler_loop() -> None:
+    _fetch_schedules()
+    while True:
+        now = datetime.now(timezone.utc)
+
+        if time.monotonic() - _last_schedule_fetch > SCHEDULE_REFRESH_INTERVAL:
+            _fetch_schedules()
+
+        with _schedule_lock:
+            schedules = list(_schedules)
+
+        next_fire: datetime | None = None
+        due: list[dict] = []
+        for s in schedules:
+            fire_at = _compute_next_fire(s, now)
+            if fire_at is None:
+                continue
+            if fire_at <= now:
+                due.append(s)
+            elif next_fire is None or fire_at < next_fire:
+                next_fire = fire_at
+
+        for s in due:
+            _fire_schedule(s)
+
+        if due:
+            continue  # recompute immediately — a fired TTR/SRS/SST rolls to its next occurrence
+
+        sleep_for = (next_fire - datetime.now(timezone.utc)).total_seconds() if next_fire else SCHEDULE_REFRESH_INTERVAL
+        sleep_for = max(0.5, min(sleep_for, SCHEDULE_REFRESH_INTERVAL))
+
+        woke_early = _schedule_refresh_event.wait(timeout=sleep_for)
+        if woke_early:
+            _schedule_refresh_event.clear()
+            _fetch_schedules()
+
+
+# ──────────────────────────────────────────────
 # MQTT callbacks
 # ──────────────────────────────────────────────
 
 
+_scheduler_started = False
+
+
 def on_connect(client, userdata, flags, rc, properties=None):
+    global _scheduler_started
     if rc == 0:
         log.info("Connected to broker %s:%s", MQTT_BROKER, MQTT_PORT)
         client.subscribe(MQTT_FLOW_TOPIC,   qos=1)
         client.subscribe(MQTT_STATUS_TOPIC, qos=0)  # QoS 0 is fine for heartbeats
         log.info("Subscribed: flow=%s  status=%s", MQTT_FLOW_TOPIC, MQTT_STATUS_TOPIC)
         HEALTH_FILE.touch()
+        if not _scheduler_started:
+            _scheduler_started = True
+            threading.Thread(target=_scheduler_loop, daemon=True).start()
     else:
         reason = {1: "bad protocol", 2: "bad client id", 3: "unavailable",
                   4: "bad credentials", 5: "not authorized"}.get(rc, f"code {rc}")
@@ -346,16 +501,34 @@ signal.signal(signal.SIGTERM, _shutdown)
 
 
 def _start_health_server() -> None:
-    """Tiny HTTP server so Railway/Fly health checks pass. Runs in a daemon thread."""
+    """Tiny HTTP server so Railway/Fly health checks pass, and so the
+    dashboard can push an instant schedule-refresh notification. Runs in a
+    daemon thread."""
     port = int(os.getenv("PORT", "8080"))
     from http.server import BaseHTTPRequestHandler, HTTPServer
+
     class _H(BaseHTTPRequestHandler):
         def do_GET(self):
             self.send_response(200)
             self.end_headers()
             self.wfile.write(b"ok")
+
+        def do_POST(self):
+            if self.path != "/refresh-schedules":
+                self.send_response(404)
+                self.end_headers()
+                return
+            if API_KEY and self.headers.get("Authorization") != f"Bearer {API_KEY}":
+                self.send_response(401)
+                self.end_headers()
+                return
+            _schedule_refresh_event.set()
+            self.send_response(200)
+            self.end_headers()
+            self.wfile.write(b"ok")
+
         def log_message(self, *_): pass  # silence access logs
-    import threading
+
     threading.Thread(target=HTTPServer(("0.0.0.0", port), _H).serve_forever, daemon=True).start()
     log.info("Health server listening on :%d", port)
 
@@ -372,6 +545,7 @@ def main():
     log.info("Status   : %s → %s", MQTT_STATUS_TOPIC, HEARTBEAT_URL)
     log.info("Auth     : %s", "Bearer ***" if API_KEY else "none (dev)")
     log.info("Debounce : %ds", HEARTBEAT_DEBOUNCE)
+    log.info("Schedule : %s → %s (tz=%s)", SCHEDULES_URL, MQTT_OMS_TOPIC, SCHEDULE_TZ)
     log.info("=" * 54)
 
     mqtt_client = mqtt.Client(

@@ -8,6 +8,14 @@ import {
     XAxis, YAxis, CartesianGrid, Tooltip,
     ResponsiveContainer, LineChart, Line
 } from 'recharts'
+import { CityPicker, CitySelection } from '@/components/CityPicker'
+
+function computeDurationMinutes(startHh: string, startMm: string, endHh: string, endMm: string): number {
+    const start = Number(startHh) * 60 + Number(startMm)
+    let end = Number(endHh) * 60 + Number(endMm)
+    if (end <= start) end += 24 * 60 // wraps past midnight
+    return end - start
+}
 import {
     Select, SelectContent, SelectItem,
     SelectTrigger, SelectValue,
@@ -608,20 +616,39 @@ function ScheduleModal({ deviceId, onClose, onAdded }: {
     onClose: () => void
     onAdded: (s: Schedule) => void
 }) {
-    const [form, setForm] = useState({ mode: 'TTR', hh: '08', mm: '00' })
+    const [form, setForm] = useState({
+        mode: 'TTR',
+        hh: '08', mm: '00',
+        endMode: 'duration' as 'duration' | 'until',
+        duration: '5',
+        endHh: '08', endMm: '30',
+    })
+    const [city, setCity] = useState<CitySelection | null>(null)
     const [loading, setLoading] = useState(false)
+    const needsSun = form.mode === 'SRS' || form.mode === 'SST'
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault()
+        if (needsSun && !city) { toast.error('Pick a city first'); return }
+
         setLoading(true)
         try {
             const trigAt = form.mode === 'TTR'
                 ? `${form.hh.padStart(2, '0')}${form.mm.padStart(2, '0')}`
                 : '0000'
+            const duration = form.mode === 'TTR' && form.endMode === 'until'
+                ? computeDurationMinutes(form.hh, form.mm, form.endHh, form.endMm)
+                : Number(form.duration)
+
             const res = await fetch(`/api/devices/${deviceId}/schedules`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ mode: form.mode, trigAt }),
+                body: JSON.stringify({
+                    mode: form.mode,
+                    trigAt,
+                    duration,
+                    ...(needsSun && city ? { lat: city.lat, lon: city.lon } : {}),
+                }),
             })
             const data = await res.json()
             if (!res.ok) throw new Error(data.error)
@@ -648,28 +675,79 @@ function ScheduleModal({ deviceId, onClose, onAdded }: {
                         <select
                             className="input-dark cursor-pointer"
                             value={form.mode}
-                            onChange={e => setForm(f => ({ ...f, mode: e.target.value }))}
+                            onChange={e => { setForm(f => ({ ...f, mode: e.target.value })); setCity(null) }}
                         >
                             <option value="TTR">⏱ Time Trigger</option>
-                            <option value="SWITCH">🔘 Switch</option>
                             <option value="SRS">🌅 Sunrise</option>
                             <option value="SST">🌇 Sunset</option>
                         </select>
                     </div>
+
                     {form.mode === 'TTR' && (
-                        <div className="flex gap-3">
-                            <div className="flex-1 flex flex-col gap-1.5">
-                                <label className="text-[0.8rem] font-medium text-text-secondary">Hour (0-23)</label>
-                                <input className="input-dark" type="number" min="0" max="23" value={form.hh}
-                                    onChange={e => setForm(f => ({ ...f, hh: e.target.value }))} />
+                        <>
+                            <div className="flex gap-3">
+                                <div className="flex-1 flex flex-col gap-1.5">
+                                    <label className="text-[0.8rem] font-medium text-text-secondary">Start Hour (0-23)</label>
+                                    <input className="input-dark" type="number" min="0" max="23" value={form.hh}
+                                        onChange={e => setForm(f => ({ ...f, hh: e.target.value }))} />
+                                </div>
+                                <div className="flex-1 flex flex-col gap-1.5">
+                                    <label className="text-[0.8rem] font-medium text-text-secondary">Start Minute (0-59)</label>
+                                    <input className="input-dark" type="number" min="0" max="59" value={form.mm}
+                                        onChange={e => setForm(f => ({ ...f, mm: e.target.value }))} />
+                                </div>
                             </div>
-                            <div className="flex-1 flex flex-col gap-1.5">
-                                <label className="text-[0.8rem] font-medium text-text-secondary">Minute (0-59)</label>
-                                <input className="input-dark" type="number" min="0" max="59" value={form.mm}
-                                    onChange={e => setForm(f => ({ ...f, mm: e.target.value }))} />
+
+                            <div className="flex gap-1 p-1 rounded-xl" style={{ background: 'rgba(255,255,255,0.05)' }}>
+                                {(['duration', 'until'] as const).map(m => (
+                                    <button
+                                        key={m}
+                                        type="button"
+                                        onClick={() => setForm(f => ({ ...f, endMode: m }))}
+                                        className={form.endMode === m ? 'btn-primary flex-1 justify-center py-1.5 text-sm' : 'btn-ghost flex-1 justify-center py-1.5 text-sm'}
+                                    >
+                                        {m === 'duration' ? 'Run for...' : 'Until time...'}
+                                    </button>
+                                ))}
                             </div>
-                        </div>
+
+                            {form.endMode === 'duration' ? (
+                                <div className="flex flex-col gap-1.5">
+                                    <label className="text-[0.8rem] font-medium text-text-secondary">ON Duration (minutes)</label>
+                                    <input className="input-dark" type="number" min="1" value={form.duration}
+                                        onChange={e => setForm(f => ({ ...f, duration: e.target.value }))} required />
+                                </div>
+                            ) : (
+                                <div className="flex gap-3">
+                                    <div className="flex-1 flex flex-col gap-1.5">
+                                        <label className="text-[0.8rem] font-medium text-text-secondary">End Hour</label>
+                                        <input className="input-dark" type="number" min="0" max="23" value={form.endHh}
+                                            onChange={e => setForm(f => ({ ...f, endHh: e.target.value }))} />
+                                    </div>
+                                    <div className="flex-1 flex flex-col gap-1.5">
+                                        <label className="text-[0.8rem] font-medium text-text-secondary">End Minute</label>
+                                        <input className="input-dark" type="number" min="0" max="59" value={form.endMm}
+                                            onChange={e => setForm(f => ({ ...f, endMm: e.target.value }))} />
+                                    </div>
+                                </div>
+                            )}
+                        </>
                     )}
+
+                    {needsSun && (
+                        <>
+                            <div className="flex flex-col gap-1.5">
+                                <label className="text-[0.8rem] font-medium text-text-secondary">Location</label>
+                                <CityPicker value={city} onChange={setCity} />
+                            </div>
+                            <div className="flex flex-col gap-1.5">
+                                <label className="text-[0.8rem] font-medium text-text-secondary">ON Duration (minutes)</label>
+                                <input className="input-dark" type="number" min="1" value={form.duration}
+                                    onChange={e => setForm(f => ({ ...f, duration: e.target.value }))} required />
+                            </div>
+                        </>
+                    )}
+
                     <div className="flex gap-3 mt-1">
                         <button type="button" onClick={onClose} className="btn-ghost flex-1 justify-center">Cancel</button>
                         <button type="submit" className="btn-primary flex-1 justify-center" disabled={loading}>
@@ -851,6 +929,7 @@ export default function DeviceDetailPage() {
             </div>
 
             {/* Schedules */}
+            {device?.type === 'oms' && (
             <div className="glass-card p-5">
                 <div className="flex items-center justify-between mb-4">
                     <h2 className="m-0 text-base font-bold text-text-primary">Schedules</h2>
@@ -869,18 +948,17 @@ export default function DeviceDetailPage() {
                             <div key={s.scheduleId} className="glass-card-hover flex items-center gap-4 px-4 py-3.5 rounded-xl border border-border-subtle">
                                 <div className="w-9 h-9 rounded-xl flex items-center justify-center text-base"
                                      style={{ background: 'rgba(139,92,246,0.15)', border: '1px solid rgba(139,92,246,0.25)' }}>
-                                    {s.mode === 'TTR' ? '⏱' : s.mode === 'SRS' ? '🌅' : s.mode === 'SST' ? '🌇' : '🔘'}
+                                    {s.mode === 'TTR' ? '⏱' : s.mode === 'SRS' ? '🌅' : '🌇'}
                                 </div>
                                 <div className="flex-1">
                                     <div className="text-sm font-semibold text-text-primary">
                                         {s.mode === 'TTR'
                                             ? `${s.trigAt?.slice(0, 2)}:${s.trigAt?.slice(2, 4)}`
                                             : s.mode === 'SRS' ? 'At Sunrise'
-                                            : s.mode === 'SST' ? 'At Sunset'
-                                            : 'Switch'}
+                                            : 'At Sunset'}
                                     </div>
                                     <div className="text-[0.72rem] text-text-muted">
-                                        Added {new Date(s.createdAt).toLocaleDateString()}
+                                        ON for {s.duration} min · Added {new Date(s.createdAt).toLocaleDateString()}
                                     </div>
                                 </div>
                                 <button onClick={() => deleteSchedule(s.scheduleId)} className="btn-danger px-2.5 py-1 text-xs">
@@ -891,6 +969,7 @@ export default function DeviceDetailPage() {
                     </div>
                 )}
             </div>
+            )}
 
             {showSchedule && (
                 <ScheduleModal

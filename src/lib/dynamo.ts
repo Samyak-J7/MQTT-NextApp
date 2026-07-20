@@ -5,8 +5,9 @@ import {
     PutCommand,
     DeleteCommand,
     QueryCommand,
+    ScanCommand,
 } from '@aws-sdk/lib-dynamodb'
-import { User, Device, SensorReading, AuditLog } from '@/app/types'
+import { User, Device, SensorReading, AuditLog, Schedule } from '@/app/types'
 
 const client = new DynamoDBClient({
     region: process.env.AWS_REGION,
@@ -70,6 +71,31 @@ export async function deleteDevice(accountId: string, deviceId: string): Promise
         TableName: 'MQTTDevices',
         Key: { accountId, deviceId },
     }))
+}
+
+// Bridge-only: full scan across all accounts, used by the scheduler to sync
+// its in-memory fire timers. Infrequent (on startup + on schedule change) so
+// a Scan is fine at prototype scale.
+export async function getAllEnabledSchedules(): Promise<(Schedule & { deviceId: string })[]> {
+    const out: (Schedule & { deviceId: string })[] = []
+    let ExclusiveStartKey: Record<string, unknown> | undefined
+
+    do {
+        const res = await docClient.send(new ScanCommand({
+            TableName: 'MQTTDevices',
+            ProjectionExpression: '#did, #sch',
+            ExpressionAttributeNames: { '#did': 'deviceId', '#sch': 'schedules' },
+            ExclusiveStartKey,
+        }))
+        for (const item of (res.Items ?? []) as { deviceId: string; schedules?: Schedule[] }[]) {
+            for (const s of item.schedules ?? []) {
+                if (s.enabled) out.push({ ...s, deviceId: item.deviceId })
+            }
+        }
+        ExclusiveStartKey = res.LastEvaluatedKey
+    } while (ExclusiveStartKey)
+
+    return out
 }
 
 // ─── Readings ─────────────────────────────────────────────────────────────────
