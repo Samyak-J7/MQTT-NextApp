@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { Device, Schedule, SensorReading, DeviceType, DEVICE_TYPE_LABELS } from '@/app/types'
+import { Device, Schedule, SensorReading, ConsumptionBucket, DeviceType, DEVICE_TYPE_LABELS } from '@/app/types'
 import { toast } from 'sonner'
 import {
     AreaChart, Area, BarChart, Bar,
@@ -9,6 +9,12 @@ import {
     ResponsiveContainer, LineChart, Line
 } from 'recharts'
 import { CityPicker, CitySelection } from '@/components/CityPicker'
+import {
+    Select, SelectContent, SelectItem,
+    SelectTrigger, SelectValue,
+} from '@/components/ui/select'
+
+type Range = '24h' | '7d' | '30d'
 
 function computeDurationMinutes(startHh: string, startMm: string, endHh: string, endMm: string): number {
     const start = Number(startHh) * 60 + Number(startMm)
@@ -16,12 +22,6 @@ function computeDurationMinutes(startHh: string, startMm: string, endHh: string,
     if (end <= start) end += 24 * 60 // wraps past midnight
     return end - start
 }
-import {
-    Select, SelectContent, SelectItem,
-    SelectTrigger, SelectValue,
-} from '@/components/ui/select'
-
-type Range = '24h' | '7d' | '30d'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -159,94 +159,91 @@ function FlowCharts({ readings, range }: { readings: SensorReading[]; range: Ran
 
 // ── Graphs: Power Meter ───────────────────────────────────────────────────────
 
-function PowerMeterCharts({ readings, range }: { readings: SensorReading[]; range: Range }) {
-    let cumKwh = 0
-    const data = readings.map(r => {
-        cumKwh += r.unit ?? 0
-        return {
-            time: fmtTs(r.timestamp, range),
-            watt:  parseFloat((r.watt  ?? 0).toFixed(1)),
-            volt:  parseFloat((r.volt  ?? 0).toFixed(1)),
-            ampr:  parseFloat((r.ampr  ?? 0).toFixed(2)),
-            pf:    parseFloat((r.pf    ?? 0).toFixed(2)),
-            frqc:  parseFloat((r.frqc  ?? 0).toFixed(1)),
-            unit:  parseFloat((r.unit  ?? 0).toFixed(3)),
-            cumKwh: parseFloat(cumKwh.toFixed(3)),
-        }
-    })
+const Stat = ({ label, value, color }: { label: string; value: string; color: string }) => (
+    <div>
+        <div className="text-[0.72rem] text-text-muted uppercase tracking-wider">{label}</div>
+        <div className="text-[1.3rem] font-extrabold" style={{ color }}>{value}</div>
+    </div>
+)
 
-    const latest = readings[readings.length - 1]
-    const totalKwh = readings.reduce((s, r) => s + (r.unit ?? 0), 0)
-    const avgWatt  = readings.length ? readings.reduce((s, r) => s + (r.watt ?? 0), 0) / readings.length : 0
+// Live one-line status — the most recent message's raw contents, so the
+// device page reads as a real-time feed rather than a historical chart.
+function PowerMeterLiveLine({ reading }: { reading: SensorReading | null }) {
+    if (!reading) return null
+    const agoSec = Math.max(0, Math.round((Date.now() - reading.timestamp) / 1000))
+    const agoLabel = agoSec < 60 ? `${agoSec}s ago` : `${Math.round(agoSec / 60)}m ago`
 
-    const Stat = ({ label, value, color }: { label: string; value: string; color: string }) => (
-        <div>
-            <div className="text-[0.72rem] text-text-muted uppercase tracking-wider">{label}</div>
-            <div className="text-[1.3rem] font-extrabold" style={{ color }}>{value}</div>
+    return (
+        <div className="glass-card px-4 py-3 mb-6 flex items-center gap-3 flex-wrap" style={{ borderColor: 'rgba(167,139,250,0.35)' }}>
+            <span className="w-2 h-2 rounded-full shrink-0" style={{ background: '#34d399', boxShadow: '0 0 6px #34d399' }} />
+            <span className="text-sm font-mono text-text-primary">
+                {reading.volt?.toFixed(1)}V · {reading.ampr?.toFixed(2)}A · {reading.watt?.toFixed(1)}W · PF {reading.pf?.toFixed(2)} · {reading.frqc?.toFixed(1)}Hz · {reading.unit?.toFixed(2)} kWh (meter total)
+            </span>
+            <span className="text-xs text-text-muted ml-auto shrink-0">Updated {agoLabel}</span>
         </div>
     )
+}
+
+// 24h: every raw message plotted individually (bar per reading).
+// 7d/30d: server-aggregated hourly/daily consumption — computed as diffs of
+// the cumulative "unit" register, not a raw sum.
+function PowerMeterCharts({ range, readings, buckets }: { range: Range; readings: SensorReading[]; buckets: ConsumptionBucket[] }) {
+    if (range === '24h') {
+        const data = readings.map(r => ({
+            time: fmtTime(r.timestamp),
+            watt: parseFloat((r.watt ?? 0).toFixed(1)),
+        }))
+        const avgWatt = readings.length ? readings.reduce((s, r) => s + (r.watt ?? 0), 0) / readings.length : 0
+        const peakWatt = readings.length ? Math.max(...readings.map(r => r.watt ?? 0)) : 0
+
+        return (
+            <div>
+                <div className="flex gap-6 mb-5 flex-wrap">
+                    <Stat label="Messages"   value={`${readings.length}`} color="#f472b6" />
+                    <Stat label="Avg Power"  value={`${avgWatt.toFixed(1)} W`} color="#f472b6" />
+                    <Stat label="Peak Power" value={`${peakWatt.toFixed(1)} W`} color="#f472b6" />
+                </div>
+                <p className="text-xs text-text-muted m-0 mb-3">Power per message (W) — every entry in the last 24h</p>
+                <ResponsiveContainer width="100%" height={280}>
+                    <BarChart data={data} margin={{ top: 5, right: 10, left: -10, bottom: 0 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+                        <XAxis dataKey="time" tick={{ fill: 'var(--text-muted)', fontSize: 10 }} axisLine={false} tickLine={false} interval="preserveStartEnd" minTickGap={20} />
+                        <YAxis tick={{ fill: 'var(--text-muted)', fontSize: 11 }} axisLine={false} tickLine={false} unit=" W" />
+                        <Tooltip content={<ChartTooltip />} />
+                        <Bar dataKey="watt" name="Power (W)" fill="#f472b6" radius={[2, 2, 0, 0]} opacity={0.85} />
+                    </BarChart>
+                </ResponsiveContainer>
+            </div>
+        )
+    }
+
+    const isDaily = range === '30d'
+    const data = buckets.map(b => ({
+        time: isDaily ? fmtDate(b.bucketStart) : fmtTime(b.bucketStart),
+        consumption: b.consumption,
+    }))
+    const totalKwh = buckets.reduce((s, b) => s + b.consumption, 0)
+    const activeBuckets = buckets.filter(b => b.readingCount > 0).length
+    const avgPerBucket = activeBuckets > 0 ? totalKwh / activeBuckets : 0
 
     return (
         <div>
-            {/* Live snapshot */}
-            <div className="flex gap-5 mb-6 flex-wrap">
-                <Stat label="Voltage"      value={latest ? `${latest.volt?.toFixed(1)} V`  : '—'} color="#a78bfa" />
-                <Stat label="Current"      value={latest ? `${latest.ampr?.toFixed(2)} A`  : '—'} color="#a78bfa" />
-                <Stat label="Power"        value={latest ? `${latest.watt?.toFixed(1)} W`  : '—'} color="#f472b6" />
-                <Stat label="Power Factor" value={latest ? `${latest.pf?.toFixed(2)}`       : '—'} color="#a78bfa" />
-                <Stat label="Frequency"    value={latest ? `${latest.frqc?.toFixed(1)} Hz` : '—'} color="#a78bfa" />
-                <Stat label="Total Energy" value={`${totalKwh.toFixed(3)} kWh`}                    color="#34d399" />
-                <Stat label="Avg Power"    value={`${avgWatt.toFixed(1)} W`}                       color="#f472b6" />
+            <div className="flex gap-6 mb-5 flex-wrap">
+                <Stat label="Total Energy" value={`${totalKwh.toFixed(2)} kWh`} color="#34d399" />
+                <Stat label={isDaily ? 'Avg / Day' : 'Avg / Hour'} value={`${avgPerBucket.toFixed(3)} kWh`} color="#34d399" />
+                <Stat label={isDaily ? 'Days' : 'Hours'} value={`${buckets.length}`} color="#34d399" />
             </div>
-
-            {/* Power over time */}
-            <p className="text-xs text-text-muted m-0 mb-3">Power (W)</p>
-            <ResponsiveContainer width="100%" height={200}>
-                <AreaChart data={data} margin={{ top: 5, right: 10, left: -10, bottom: 0 }}>
-                    <defs>
-                        <linearGradient id="wattGrad" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%"  stopColor="#f472b6" stopOpacity={0.3} />
-                            <stop offset="95%" stopColor="#f472b6" stopOpacity={0} />
-                        </linearGradient>
-                    </defs>
+            <p className="text-xs text-text-muted m-0 mb-3">
+                {isDaily ? 'Daily consumption (kWh) — last 30 days' : 'Hourly consumption (kWh) — last 7 days'}
+            </p>
+            <ResponsiveContainer width="100%" height={280}>
+                <BarChart data={data} margin={{ top: 5, right: 10, left: -10, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-                    <XAxis dataKey="time" tick={{ fill: 'var(--text-muted)', fontSize: 11 }} axisLine={false} tickLine={false} />
-                    <YAxis tick={{ fill: 'var(--text-muted)', fontSize: 11 }} axisLine={false} tickLine={false} unit=" W" />
-                    <Tooltip content={<ChartTooltip />} />
-                    <Area type="monotone" dataKey="watt" name="Power (W)" stroke="#f472b6" strokeWidth={2} fill="url(#wattGrad)" />
-                </AreaChart>
-            </ResponsiveContainer>
-
-            {/* Voltage & Current */}
-            <p className="text-xs text-text-muted m-0 mt-5 mb-3">Voltage (V) &amp; Current (A)</p>
-            <ResponsiveContainer width="100%" height={200}>
-                <LineChart data={data} margin={{ top: 5, right: 10, left: -10, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-                    <XAxis dataKey="time" tick={{ fill: 'var(--text-muted)', fontSize: 11 }} axisLine={false} tickLine={false} />
-                    <YAxis yAxisId="v" tick={{ fill: 'var(--text-muted)', fontSize: 11 }} axisLine={false} tickLine={false} unit=" V" />
-                    <YAxis yAxisId="a" orientation="right" tick={{ fill: 'var(--text-muted)', fontSize: 11 }} axisLine={false} tickLine={false} unit=" A" />
-                    <Tooltip content={<ChartTooltip />} />
-                    <Line yAxisId="v" type="monotone" dataKey="volt" name="Voltage (V)" stroke="#a78bfa" strokeWidth={2} dot={false} />
-                    <Line yAxisId="a" type="monotone" dataKey="ampr" name="Current (A)" stroke="#22d3ee" strokeWidth={2} dot={false} />
-                </LineChart>
-            </ResponsiveContainer>
-
-            {/* Cumulative energy */}
-            <p className="text-xs text-text-muted m-0 mt-5 mb-3">Cumulative Energy (kWh)</p>
-            <ResponsiveContainer width="100%" height={160}>
-                <AreaChart data={data} margin={{ top: 5, right: 10, left: -10, bottom: 0 }}>
-                    <defs>
-                        <linearGradient id="kwhGrad" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%"  stopColor="#34d399" stopOpacity={0.3} />
-                            <stop offset="95%" stopColor="#34d399" stopOpacity={0} />
-                        </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-                    <XAxis dataKey="time" tick={{ fill: 'var(--text-muted)', fontSize: 11 }} axisLine={false} tickLine={false} />
+                    <XAxis dataKey="time" tick={{ fill: 'var(--text-muted)', fontSize: 10 }} axisLine={false} tickLine={false} interval="preserveStartEnd" minTickGap={20} />
                     <YAxis tick={{ fill: 'var(--text-muted)', fontSize: 11 }} axisLine={false} tickLine={false} unit=" kWh" />
                     <Tooltip content={<ChartTooltip />} />
-                    <Area type="monotone" dataKey="cumKwh" name="Cumulative (kWh)" stroke="#34d399" strokeWidth={2} fill="url(#kwhGrad)" />
-                </AreaChart>
+                    <Bar dataKey="consumption" name="Consumption (kWh)" fill="#34d399" radius={[2, 2, 0, 0]} opacity={0.85} />
+                </BarChart>
             </ResponsiveContainer>
         </div>
     )
@@ -770,6 +767,8 @@ export default function DeviceDetailPage() {
     const [device, setDevice] = useState<Device | null>(null)
     const [lastSeen, setLastSeen] = useState<number | null>(null)
     const [readings, setReadings] = useState<SensorReading[]>([])
+    const [buckets, setBuckets] = useState<ConsumptionBucket[]>([])
+    const [latestReading, setLatestReading] = useState<SensorReading | null>(null)
     const [range, setRange] = useState<Range>('7d')
     const [loading, setLoading] = useState(true)
     const [showSchedule, setShowSchedule] = useState(false)
@@ -785,10 +784,20 @@ export default function DeviceDetailPage() {
             .catch(() => {})
     }, [deviceId])
 
+    const pollLatest = useCallback(() => {
+        fetch(`/api/devices/${deviceId}/latest`)
+            .then(r => r.json())
+            .then(d => { if (d.reading !== undefined) setLatestReading(d.reading) })
+            .catch(() => {})
+    }, [deviceId])
+
     const loadReadings = useCallback(() => {
         fetch(`/api/devices/${deviceId}/readings?range=${range}`)
             .then(r => r.json())
-            .then(d => setReadings(d.readings ?? []))
+            .then(d => {
+                if (d.aggregated) { setBuckets(d.buckets ?? []); setReadings([]) }
+                else { setReadings(d.readings ?? []); setBuckets([]) }
+            })
             .finally(() => setLoading(false))
     }, [deviceId, range])
 
@@ -799,6 +808,13 @@ export default function DeviceDetailPage() {
         const interval = setInterval(pollStatus, 20_000)
         return () => clearInterval(interval)
     }, [loadDevice, loadReadings, pollStatus])
+
+    useEffect(() => {
+        if (device?.type !== 'power_meter') return
+        pollLatest()
+        const interval = setInterval(pollLatest, 20_000)
+        return () => clearInterval(interval)
+    }, [device?.type, pollLatest])
 
     const deleteSchedule = async (scheduleId: string) => {
         try {
@@ -825,9 +841,13 @@ export default function DeviceDetailPage() {
     const isOnline = effectiveLastSeen ? Date.now() - effectiveLastSeen < 5 * 60 * 1000 : false
     const accent = device?.type ? TYPE_ACCENT[device.type] : '#60a5fa'
 
+    const totalReadingsDisplay = buckets.length > 0
+        ? buckets.reduce((s, b) => s + b.readingCount, 0)
+        : readings.length
+
     const metaItems = [
         { label: 'Type',          value: device?.type ? DEVICE_TYPE_LABELS[device.type] : '—' },
-        { label: 'Total Readings', value: readings.length || '—' },
+        { label: 'Total Readings', value: totalReadingsDisplay || '—' },
         { label: 'Last Seen',     value: effectiveLastSeen ? new Date(effectiveLastSeen).toLocaleString() : 'Never' },
         { label: 'Schedules',     value: (device?.schedules ?? []).length },
         { label: 'Added',         value: device?.createdAt ? new Date(device.createdAt).toLocaleDateString() : '—' },
@@ -892,6 +912,9 @@ export default function DeviceDetailPage() {
                 <OmsControl deviceId={deviceId} initialDuration={device.defaultDuration} />
             )}
 
+            {/* Live status — power meter only */}
+            {device?.type === 'power_meter' && <PowerMeterLiveLine reading={latestReading} />}
+
             {/* Charts */}
             <div className="glass-card p-5 mb-6">
                 <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
@@ -911,21 +934,25 @@ export default function DeviceDetailPage() {
                     </div>
                 </div>
 
-                {loading ? (
-                    <div className="flex justify-center py-10">
-                        <span className="spinner" />
-                    </div>
-                ) : readings.length === 0 ? (
-                    <div className="text-center py-10 text-text-muted text-sm">
-                        No readings yet for this range.
-                    </div>
-                ) : device?.type === 'oms' ? (
-                    <OmsCharts readings={readings} range={range} />
-                ) : device?.type === 'liquid_flow' ? (
-                    <FlowCharts readings={readings} range={range} />
-                ) : (
-                    <PowerMeterCharts readings={readings} range={range} />
-                )}
+                {(() => {
+                    const isEmpty = device?.type === 'power_meter' && range !== '24h'
+                        ? buckets.every(b => b.readingCount === 0)
+                        : readings.length === 0
+
+                    if (loading) return (
+                        <div className="flex justify-center py-10">
+                            <span className="spinner" />
+                        </div>
+                    )
+                    if (isEmpty) return (
+                        <div className="text-center py-10 text-text-muted text-sm">
+                            No readings yet for this range.
+                        </div>
+                    )
+                    if (device?.type === 'oms') return <OmsCharts readings={readings} range={range} />
+                    if (device?.type === 'liquid_flow') return <FlowCharts readings={readings} range={range} />
+                    return <PowerMeterCharts readings={readings} buckets={buckets} range={range} />
+                })()}
             </div>
 
             {/* Schedules */}

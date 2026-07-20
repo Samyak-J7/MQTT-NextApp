@@ -54,13 +54,23 @@ export interface SensorReading {
     // oms / liquid_flow
     duration?: number
     consumption?: number
-    // power_meter
+    // power_meter — "unit" is the meter's cumulative register (ever-increasing)
     volt?: number
     ampr?: number
     watt?: number
-    unit?: number   // kWh
+    unit?: number   // kWh, cumulative total
     frqc?: number
     pf?: number
+}
+
+// Server-computed hourly/daily consumption bucket for power_meter charts —
+// consumption is the diff of the cumulative "unit" register across the
+// bucket, not a raw sum (since unit never resets to 0 per-reading).
+export interface ConsumptionBucket {
+    bucketStart: number
+    consumption: number      // kWh used during this bucket
+    avgWatt: number | null
+    readingCount: number
 }
 
 export interface AuditLog {

@@ -136,6 +136,54 @@ export async function getReadings(
     return (res.Items as SensorReading[]) ?? []
 }
 
+// Every matching reading in [fromTs, toTs], ascending, no artificial cap —
+// pages through DynamoDB's 1MB-per-response limit internally. Used for
+// server-side consumption aggregation (7d/30d power_meter buckets) where a
+// capped query would silently drop data.
+export async function getReadingsPaginated(
+    deviceId: string,
+    fromTs: number,
+    toTs: number
+): Promise<SensorReading[]> {
+    const out: SensorReading[] = []
+    let ExclusiveStartKey: Record<string, unknown> | undefined
+
+    do {
+        const res = await docClient.send(new QueryCommand({
+            TableName: 'SensorReadings',
+            KeyConditionExpression: 'deviceId = :did AND #ts BETWEEN :from AND :to',
+            ExpressionAttributeNames: { '#ts': 'timestamp' },
+            ExpressionAttributeValues: { ':did': deviceId, ':from': fromTs, ':to': toTs },
+            ScanIndexForward: true,
+            ExclusiveStartKey,
+        }))
+        out.push(...((res.Items as SensorReading[]) ?? []))
+        ExclusiveStartKey = res.LastEvaluatedKey
+    } while (ExclusiveStartKey)
+
+    return out
+}
+
+// Most recent reading at or before `beforeTs` — used to seed consumption
+// aggregation so the first bucket in a range isn't inflated by all usage
+// that happened before the window started.
+export async function getSeedReading(deviceId: string, beforeTs: number): Promise<SensorReading | null> {
+    const res = await docClient.send(new QueryCommand({
+        TableName: 'SensorReadings',
+        KeyConditionExpression: 'deviceId = :did AND #ts <= :before',
+        ExpressionAttributeNames: { '#ts': 'timestamp' },
+        ExpressionAttributeValues: { ':did': deviceId, ':before': beforeTs },
+        ScanIndexForward: false,
+        Limit: 1,
+    }))
+    return ((res.Items as SensorReading[]) ?? [])[0] ?? null
+}
+
+export async function getLatestReading(deviceId: string): Promise<SensorReading | null> {
+    const readings = await getReadings(deviceId, undefined, undefined, 1)
+    return readings[0] ?? null
+}
+
 // ─── Heartbeats ───────────────────────────────────────────────────────────────
 // Table: DeviceHeartbeats — PK: deviceId (string)
 // Simple upsert — always one row per device, unknown IDs are harmless (never queried).
