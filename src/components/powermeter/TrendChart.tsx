@@ -2,6 +2,7 @@
 import { SensorReading, ConsumptionBucket } from '@/app/types'
 import { resampleSeries } from '@/lib/resample'
 import { ChartTooltip } from '@/components/ChartTooltip'
+import { SegmentedControl } from './SegmentedControl'
 import {
     AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts'
@@ -105,7 +106,7 @@ function DailyBars({ buckets }: { buckets: ConsumptionBucket[] }) {
                     <XAxis dataKey="time" tick={{ fill: 'var(--text-muted)', fontSize: 10 }} axisLine={false} tickLine={false} interval="preserveStartEnd" minTickGap={20} />
                     <YAxis tick={{ fill: 'var(--text-muted)', fontSize: 11 }} axisLine={false} tickLine={false} unit=" kWh" />
                     <Tooltip content={<ChartTooltip />} />
-                    <Bar dataKey="consumption" name="Consumption (kWh)" fill="#34d399" radius={[4, 4, 0, 0]} opacity={0.85} maxBarSize={36} />
+                    <Bar dataKey="consumption" name="Consumption (kWh)" fill="#34d399" radius={[4, 4, 0, 0]} opacity={0.85} maxBarSize={24} />
                 </BarChart>
             </ResponsiveContainer>
         </div>
@@ -128,14 +129,11 @@ export function TrendChart({
         <div className="glass-card p-5 mb-6">
             <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
                 <h2 className="m-0 text-base font-bold text-text-primary">Power Trend</h2>
-                <div className="flex gap-1.5">
-                    {(['live', '24h', '7d', '30d'] as PMRange[]).map(r => (
-                        <button key={r} onClick={() => onRangeChange(r)}
-                            className={`${range === r ? 'btn-primary' : 'btn-ghost'} px-3.5 py-1.5 text-[0.8rem]`}>
-                            {RANGE_LABELS[r]}
-                        </button>
-                    ))}
-                </div>
+                <SegmentedControl
+                    options={(['live', '24h', '7d', '30d'] as PMRange[]).map(r => ({ value: r, label: RANGE_LABELS[r] }))}
+                    value={range}
+                    onChange={onRangeChange}
+                />
             </div>
 
             {loading ? (

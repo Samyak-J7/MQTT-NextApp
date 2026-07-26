@@ -2,6 +2,7 @@
 import { useState } from 'react'
 import { ConsumptionBucket } from '@/app/types'
 import { ChartTooltip } from '@/components/ChartTooltip'
+import { SegmentedControl } from './SegmentedControl'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 
 type EnergyRange = 'today' | '7d' | '30d'
@@ -46,14 +47,11 @@ export function EnergyTrend({
         <div className="glass-card p-5 mb-6">
             <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
                 <h2 className="m-0 text-base font-bold text-text-primary">Energy Consumption</h2>
-                <div className="flex gap-1.5">
-                    {(['today', '7d', '30d'] as EnergyRange[]).map(r => (
-                        <button key={r} onClick={() => setView(r)}
-                            className={`${view === r ? 'btn-primary' : 'btn-ghost'} px-3.5 py-1.5 text-[0.8rem]`}>
-                            {RANGE_LABELS[r]}
-                        </button>
-                    ))}
-                </div>
+                <SegmentedControl
+                    options={(['today', '7d', '30d'] as EnergyRange[]).map(r => ({ value: r, label: RANGE_LABELS[r] }))}
+                    value={view}
+                    onChange={setView}
+                />
             </div>
 
             {isEmpty ? (
@@ -71,7 +69,7 @@ export function EnergyTrend({
                             <XAxis dataKey="time" tick={{ fill: 'var(--text-muted)', fontSize: 10 }} axisLine={false} tickLine={false} interval="preserveStartEnd" minTickGap={20} />
                             <YAxis tick={{ fill: 'var(--text-muted)', fontSize: 11 }} axisLine={false} tickLine={false} unit=" kWh" />
                             <Tooltip content={<ChartTooltip />} />
-                            <Bar dataKey="consumption" name="Consumption (kWh)" fill="#34d399" radius={[4, 4, 0, 0]} opacity={0.85} maxBarSize={36} />
+                            <Bar dataKey="consumption" name="Consumption (kWh)" fill="#34d399" radius={[4, 4, 0, 0]} opacity={0.85} maxBarSize={24} />
                         </BarChart>
                     </ResponsiveContainer>
                 </div>
