@@ -2,8 +2,15 @@
 MQTT-to-API Bridge
 
 Topic routing:
-  MQTT_STATUS_TOPIC  (default: pit_fbk)       — device alive pings  → /api/heartbeat
-  MQTT_FLOW_TOPIC    (default: pit_fbk/flow)  — sensor readings     → /api/readings
+  MQTT_STATUS_TOPIC  (default: pit_fbk)       — device alive pings       → /api/heartbeat
+  MQTT_FLOW_TOPIC    (default: pit_fbk/flow)  — oms/liquid_flow readings → /api/readings
+  MQTT_LOGG_TOPIC    (default: pit_fbk/logg)  — mixed-content channel;
+                                                 only power_meter-shaped
+                                                 items are extracted and
+                                                 forwarded → /api/readings.
+                                                 Everything else on this
+                                                 topic is expected traffic
+                                                 and silently ignored.
 
 Status ping payload (any of these are accepted):
   {"device_id": "DEV-001"}
@@ -13,6 +20,10 @@ Status ping payload (any of these are accepted):
 Flow payload:
   {"fbk": [{"device_id": "DEV-001", "type": "oms", "duration": 3600}]}
   {"fbk": [{"device_id": "DEV-002", "type": "liquid_flow", "duration": 3600, "consumption": 142.5}]}
+
+Logg payload (power_meter, mixed in with unrelated messages):
+  {"fbk": [{"dev_id": "pit_pzmE44586043254", "volt": 236.0, "ampr": 0.71,
+            "unit": 74.61, "frqc": 50.0, "watt": 150.2, "pf": 0.89}]}
 
 Scheduling:
   Fetches enabled TTR/SRS/SST schedules from GET {API_URL}/schedules/all and
@@ -68,6 +79,7 @@ MQTT_CLIENT_ID = _optional("MQTT_CLIENT_ID", f"bridge-{int(time.time())}")
 # Explicit topic names — no wildcard so each has clear handling
 MQTT_FLOW_TOPIC   = _optional("MQTT_FLOW_TOPIC",   "pit_fbk/flow")
 MQTT_STATUS_TOPIC = _optional("MQTT_STATUS_TOPIC", "pit_fbk")
+MQTT_LOGG_TOPIC   = _optional("MQTT_LOGG_TOPIC",   "pit_fbk/logg")
 
 # Field name used in status pings to carry the device id
 STATUS_DEVICE_ID_FIELD = _optional("STATUS_DEVICE_ID_FIELD", "device_id")
@@ -139,6 +151,7 @@ stats: dict = {
     "messages_received": 0,
     "readings_forwarded": 0,
     "readings_failed": 0,
+    "logg_ignored": 0,
     "heartbeats_sent": 0,
     "started_at": datetime.now(timezone.utc).isoformat(),
 }
@@ -150,11 +163,12 @@ def _maybe_log_stats() -> None:
     now = time.monotonic()
     if now - _last_stats_log >= STATS_INTERVAL:
         log.info(
-            "Stats: received=%d readings=%d heartbeats=%d failed=%d",
+            "Stats: received=%d readings=%d heartbeats=%d failed=%d logg_ignored=%d",
             stats["messages_received"],
             stats["readings_forwarded"],
             stats["heartbeats_sent"],
             stats["readings_failed"],
+            stats["logg_ignored"],
         )
         _last_stats_log = now
 
@@ -252,6 +266,61 @@ def _handle_flow(topic: str, raw: str) -> None:
     else:
         log.error("Readings API %s [%s]: %.300s", resp.status_code, topic, resp.text)
         stats["readings_failed"] += len(valid)
+
+# ──────────────────────────────────────────────
+# Logg topic — mixed-content channel, power_meter only.
+# Other message shapes on this topic are expected traffic (other firmware
+# writing to the same channel), not errors — dropped at debug level only.
+# ──────────────────────────────────────────────
+
+
+def _handle_logg(topic: str, raw: str) -> None:
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError:
+        log.debug("Non-JSON message on [%s], ignoring: %.200s", topic, raw)
+        stats["logg_ignored"] += 1
+        return
+
+    fbk = data.get("fbk")
+    if not isinstance(fbk, list) or not fbk:
+        log.debug("No 'fbk' array on [%s], ignoring: %.200s", topic, raw)
+        stats["logg_ignored"] += 1
+        return
+
+    power_meter_items: list[dict] = []
+    for item in fbk:
+        if not isinstance(item, dict):
+            stats["logg_ignored"] += 1
+            continue
+        normalised = _normalise_item(item)
+        ok, err = _validate_item(normalised)
+        if ok and normalised.get("type") == "power_meter":
+            power_meter_items.append(normalised)
+        else:
+            log.debug("fbk item on [%s] ignored (%s): %.150s", topic, err or "not power_meter", item)
+            stats["logg_ignored"] += 1
+
+    if not power_meter_items:
+        return
+
+    try:
+        resp = _http.post(READINGS_URL, json={"fbk": power_meter_items}, headers=_api_headers(), timeout=10)
+    except requests.RequestException as exc:
+        log.error("Readings API failed [%s]: %s", topic, exc)
+        stats["readings_failed"] += len(power_meter_items)
+        return
+
+    if resp.status_code in (200, 207):
+        results = resp.json().get("results", [])
+        saved  = sum(1 for r in results if r.get("status") == "saved")
+        failed = sum(1 for r in results if r.get("status") != "saved")
+        log.info("[logg] %d power_meter item(s) → saved=%d failed=%d", len(power_meter_items), saved, failed)
+        stats["readings_forwarded"] += saved
+        stats["readings_failed"]    += failed
+    else:
+        log.error("Readings API %s [%s]: %.300s", resp.status_code, topic, resp.text)
+        stats["readings_failed"] += len(power_meter_items)
 
 # ──────────────────────────────────────────────
 # Status topic — heartbeat / alive ping
@@ -446,8 +515,9 @@ def on_connect(client, userdata, flags, rc, properties=None):
     if rc == 0:
         log.info("Connected to broker %s:%s", MQTT_BROKER, MQTT_PORT)
         client.subscribe(MQTT_FLOW_TOPIC,   qos=1)
+        client.subscribe(MQTT_LOGG_TOPIC,   qos=1)
         client.subscribe(MQTT_STATUS_TOPIC, qos=0)  # QoS 0 is fine for heartbeats
-        log.info("Subscribed: flow=%s  status=%s", MQTT_FLOW_TOPIC, MQTT_STATUS_TOPIC)
+        log.info("Subscribed: flow=%s  logg=%s  status=%s", MQTT_FLOW_TOPIC, MQTT_LOGG_TOPIC, MQTT_STATUS_TOPIC)
         HEALTH_FILE.touch()
         if not _scheduler_started:
             _scheduler_started = True
@@ -477,6 +547,8 @@ def on_message(client, userdata, msg):
 
     if topic == MQTT_FLOW_TOPIC:
         _handle_flow(topic, raw)
+    elif topic == MQTT_LOGG_TOPIC:
+        _handle_logg(topic, raw)
     elif topic == MQTT_STATUS_TOPIC:
         _handle_status(topic, raw)
     else:
@@ -552,6 +624,7 @@ def main():
     log.info("MQTT Bridge starting")
     log.info("Broker   : %s:%d  TLS=%s", MQTT_BROKER, MQTT_PORT, MQTT_USE_TLS)
     log.info("Flow     : %s → %s", MQTT_FLOW_TOPIC, READINGS_URL)
+    log.info("Logg     : %s → %s (power_meter only)", MQTT_LOGG_TOPIC, READINGS_URL)
     log.info("Status   : %s → %s", MQTT_STATUS_TOPIC, HEARTBEAT_URL)
     log.info("Auth     : %s", "Bearer ***" if API_KEY else "none (dev)")
     log.info("Debounce : %ds", HEARTBEAT_DEBOUNCE)

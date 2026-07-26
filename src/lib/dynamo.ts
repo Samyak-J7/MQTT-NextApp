@@ -6,8 +6,9 @@ import {
     DeleteCommand,
     QueryCommand,
     ScanCommand,
+    UpdateCommand,
 } from '@aws-sdk/lib-dynamodb'
-import { User, Device, SensorReading, AuditLog, Schedule } from '@/app/types'
+import { User, Device, SensorReading, AuditLog, Schedule, AggregateBucket, DeviceType } from '@/app/types'
 
 const client = new DynamoDBClient({
     region: process.env.AWS_REGION,
@@ -100,8 +101,10 @@ export async function getAllEnabledSchedules(): Promise<(Schedule & { deviceId: 
 
 // ─── Readings ─────────────────────────────────────────────────────────────────
 // Table: SensorReadings — PK: deviceId (string), SK: timestamp (number)
+// oms / liquid_flow only. power_meter uses DeviceReadingsRealtime below.
 
-export async function getReadings(
+async function queryReadings(
+    tableName: string,
     deviceId: string,
     fromTs?: number,
     toTs?: number,
@@ -111,7 +114,7 @@ export async function getReadings(
 
     const params = needsTimestamp
         ? {
-            TableName: 'SensorReadings',
+            TableName: tableName,
             KeyConditionExpression: fromTs && toTs
                 ? 'deviceId = :did AND #ts BETWEEN :from AND :to'
                 : 'deviceId = :did AND #ts >= :from',
@@ -125,7 +128,7 @@ export async function getReadings(
             Limit: limit,
           }
         : {
-            TableName: 'SensorReadings',
+            TableName: tableName,
             KeyConditionExpression: 'deviceId = :did',
             ExpressionAttributeValues: { ':did': deviceId },
             ScanIndexForward: false,
@@ -136,52 +139,101 @@ export async function getReadings(
     return (res.Items as SensorReading[]) ?? []
 }
 
-// Every matching reading in [fromTs, toTs], ascending, no artificial cap —
-// pages through DynamoDB's 1MB-per-response limit internally. Used for
-// server-side consumption aggregation (7d/30d power_meter buckets) where a
-// capped query would silently drop data.
-export async function getReadingsPaginated(
+export async function getReadings(
     deviceId: string,
-    fromTs: number,
-    toTs: number
+    fromTs?: number,
+    toTs?: number,
+    limit = 200
 ): Promise<SensorReading[]> {
-    const out: SensorReading[] = []
-    let ExclusiveStartKey: Record<string, unknown> | undefined
-
-    do {
-        const res = await docClient.send(new QueryCommand({
-            TableName: 'SensorReadings',
-            KeyConditionExpression: 'deviceId = :did AND #ts BETWEEN :from AND :to',
-            ExpressionAttributeNames: { '#ts': 'timestamp' },
-            ExpressionAttributeValues: { ':did': deviceId, ':from': fromTs, ':to': toTs },
-            ScanIndexForward: true,
-            ExclusiveStartKey,
-        }))
-        out.push(...((res.Items as SensorReading[]) ?? []))
-        ExclusiveStartKey = res.LastEvaluatedKey
-    } while (ExclusiveStartKey)
-
-    return out
-}
-
-// Most recent reading at or before `beforeTs` — used to seed consumption
-// aggregation so the first bucket in a range isn't inflated by all usage
-// that happened before the window started.
-export async function getSeedReading(deviceId: string, beforeTs: number): Promise<SensorReading | null> {
-    const res = await docClient.send(new QueryCommand({
-        TableName: 'SensorReadings',
-        KeyConditionExpression: 'deviceId = :did AND #ts <= :before',
-        ExpressionAttributeNames: { '#ts': 'timestamp' },
-        ExpressionAttributeValues: { ':did': deviceId, ':before': beforeTs },
-        ScanIndexForward: false,
-        Limit: 1,
-    }))
-    return ((res.Items as SensorReading[]) ?? [])[0] ?? null
+    return queryReadings('SensorReadings', deviceId, fromTs, toTs, limit)
 }
 
 export async function getLatestReading(deviceId: string): Promise<SensorReading | null> {
     const readings = await getReadings(deviceId, undefined, undefined, 1)
     return readings[0] ?? null
+}
+
+// ─── Realtime readings (power_meter) ───────────────────────────────────────────
+// Table: DeviceReadingsRealtime — PK: deviceId (string), SK: timestamp (number)
+// Same discriminated-by-type row shape as SensorReadings, plus a `ttl`
+// attribute (epoch seconds) so DynamoDB auto-expires rows after ~24h. Only
+// power_meter writes here today; other device types may move onto this same
+// table later as they migrate to the fbk/logg pipeline.
+
+export async function putRealtimeReading(reading: SensorReading): Promise<void> {
+    const ttl = Math.floor(Date.now() / 1000) + 24 * 60 * 60
+    await docClient.send(new PutCommand({
+        TableName: 'DeviceReadingsRealtime',
+        Item: { ...reading, ttl },
+    }))
+}
+
+export async function getRealtimeReadings(
+    deviceId: string,
+    fromTs?: number,
+    toTs?: number,
+    limit = 200
+): Promise<SensorReading[]> {
+    return queryReadings('DeviceReadingsRealtime', deviceId, fromTs, toTs, limit)
+}
+
+export async function getLatestRealtimeReading(deviceId: string): Promise<SensorReading | null> {
+    const readings = await getRealtimeReadings(deviceId, undefined, undefined, 1)
+    return readings[0] ?? null
+}
+
+// ─── Aggregates (daily/weekly/monthly rollups) ─────────────────────────────────
+// Table: DeviceAggregates — PK: deviceId (string), SK: aggKey (string),
+// formatted "H#2026-07-26T14" (hourly) or "D#2026-07-26" (daily). Updated
+// incrementally on every ingested reading (see upsertAggregate) instead of
+// recomputed from raw history, so 7d/30d/weekly/monthly stats never require
+// scanning the full reading history. Sums (not averages) are stored since
+// avg-of-avgs isn't additive across incremental updates — derive averages
+// at read time as sum / readingCount.
+
+export async function upsertAggregate(
+    deviceId: string,
+    aggKey: string,
+    granularity: 'hour' | 'day',
+    periodStart: number,
+    type: DeviceType,
+    delta: { consumptionKwh: number; watt: number; volt: number; ampr: number; frqc: number; pf: number; unit: number }
+): Promise<void> {
+    await docClient.send(new UpdateCommand({
+        TableName: 'DeviceAggregates',
+        Key: { deviceId, aggKey },
+        UpdateExpression:
+            'ADD consumptionKwh :c, sumWatt :w, sumVolt :v, sumAmpr :a, sumFrqc :f, sumPf :p, readingCount :one ' +
+            'SET lastUnit = :unit, updatedAt = :now, ' +
+            'periodStart = if_not_exists(periodStart, :ps), ' +
+            'granularity = if_not_exists(granularity, :gran), ' +
+            '#typ = if_not_exists(#typ, :typ)',
+        ExpressionAttributeNames: { '#typ': 'type' },
+        ExpressionAttributeValues: {
+            ':c': delta.consumptionKwh,
+            ':w': delta.watt,
+            ':v': delta.volt,
+            ':a': delta.ampr,
+            ':f': delta.frqc,
+            ':p': delta.pf,
+            ':one': 1,
+            ':unit': delta.unit,
+            ':now': Date.now(),
+            ':ps': periodStart,
+            ':gran': granularity,
+            ':typ': type,
+        },
+    }))
+}
+
+export async function getAggregates(deviceId: string, fromKey: string, toKey: string): Promise<AggregateBucket[]> {
+    const res = await docClient.send(new QueryCommand({
+        TableName: 'DeviceAggregates',
+        KeyConditionExpression: 'deviceId = :did AND aggKey BETWEEN :from AND :to',
+        ExpressionAttributeValues: { ':did': deviceId, ':from': fromKey, ':to': toKey },
+        ScanIndexForward: true,
+    }))
+    return (res.Items as AggregateBucket[]) ?? []
 }
 
 // ─── Heartbeats ───────────────────────────────────────────────────────────────

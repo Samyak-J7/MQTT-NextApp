@@ -1,16 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
-import { DynamoDBClient } from '@aws-sdk/client-dynamodb'
-import { DynamoDBDocumentClient, PutCommand } from '@aws-sdk/lib-dynamodb'
-
-const client = new DynamoDBClient({
-    region: process.env.AWS_REGION,
-    credentials: {
-        accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
-        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
-    },
-})
-const docClient = DynamoDBDocumentClient.from(client)
+import { PutCommand } from '@aws-sdk/lib-dynamodb'
+import { docClient, putRealtimeReading, getLatestRealtimeReading, upsertAggregate } from '@/lib/dynamo'
+import { dayKey, hourKey, dayBucketStart, hourBucketStart } from '@/lib/aggKey'
 
 const BaseFields = {
     device_id: z.string().min(1).max(100).optional(),
@@ -61,19 +53,35 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         if (!deviceId) { results.push({ deviceId: '?', status: 'error' }); continue }
         try {
             const base = { deviceId, timestamp: now }
-            let record: Record<string, unknown>
 
             if ('volt' in item) {
-                record = { ...base, type: 'power_meter',
+                const record = { ...base, type: 'power_meter' as const,
                     volt: item.volt, ampr: item.ampr, watt: item.watt,
                     unit: item.unit, frqc: item.frqc, pf: item.pf }
+
+                // Delta against the device's previous reading — done before
+                // writing the new one so the aggregate update reflects only
+                // the energy used since that last reading, not a per-bucket
+                // first/last diff (which reports 0 for any bucket that only
+                // ever receives a single message).
+                const prev = await getLatestRealtimeReading(deviceId)
+                const delta = prev?.unit != null ? Math.max(0, record.unit - prev.unit) : 0
+
+                await putRealtimeReading(record)
+
+                const deltaFields = { consumptionKwh: delta, watt: record.watt, volt: record.volt, ampr: record.ampr, frqc: record.frqc, pf: record.pf, unit: record.unit }
+                await Promise.all([
+                    upsertAggregate(deviceId, hourKey(now), 'hour', hourBucketStart(now), 'power_meter', deltaFields),
+                    upsertAggregate(deviceId, dayKey(now), 'day', dayBucketStart(now), 'power_meter', deltaFields),
+                ])
             } else if (item.type === 'liquid_flow') {
-                record = { ...base, type: 'liquid_flow', duration: item.duration, consumption: item.consumption }
+                const record = { ...base, type: 'liquid_flow', duration: item.duration, consumption: item.consumption }
+                await docClient.send(new PutCommand({ TableName: 'SensorReadings', Item: record }))
             } else {
-                record = { ...base, type: 'oms', duration: item.duration }
+                const record = { ...base, type: 'oms', duration: item.duration }
+                await docClient.send(new PutCommand({ TableName: 'SensorReadings', Item: record }))
             }
 
-            await docClient.send(new PutCommand({ TableName: 'SensorReadings', Item: record }))
             results.push({ deviceId, status: 'saved' })
         } catch (err) {
             console.error(`Failed to save reading for ${deviceId}:`, err)

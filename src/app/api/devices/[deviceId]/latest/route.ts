@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
-import { getDevice, getLatestReading } from '@/lib/dynamo'
+import { getDevice, getLatestReading, getLatestRealtimeReading } from '@/lib/dynamo'
 
 interface RouteParams { params: Promise<{ deviceId: string }> }
 
@@ -15,7 +15,9 @@ export async function GET(_req: NextRequest, { params }: RouteParams): Promise<N
     if (!device) return NextResponse.json({ error: 'Device not found' }, { status: 404 })
 
     try {
-        const reading = await getLatestReading(deviceId)
+        const reading = device.type === 'power_meter'
+            ? await getLatestRealtimeReading(deviceId)
+            : await getLatestReading(deviceId)
         return NextResponse.json({ reading })
     } catch (err) {
         console.error('GET /api/devices/[deviceId]/latest:', err)

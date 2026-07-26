@@ -71,6 +71,30 @@ export interface ConsumptionBucket {
     consumption: number      // kWh used during this bucket
     avgWatt: number | null
     readingCount: number
+    lastUnit?: number        // meter's cumulative register at this bucket's last reading — for audit/cross-check
+}
+
+// Row shape of the DeviceAggregates table — one row per device per hour
+// ("H#2026-07-26T14") or day ("D#2026-07-26"), updated incrementally on
+// every ingested reading rather than recomputed from raw history. Sums
+// (not averages) are stored since avg-of-avgs isn't additive across
+// incremental updates; averages are derived at read time as sum/readingCount.
+export interface AggregateBucket {
+    deviceId: string
+    aggKey: string
+    type: DeviceType
+    granularity: 'hour' | 'day'
+    periodStart: number
+    updatedAt: number
+    // power_meter
+    consumptionKwh?: number
+    sumWatt?: number
+    sumVolt?: number
+    sumAmpr?: number
+    sumFrqc?: number
+    sumPf?: number
+    readingCount: number
+    lastUnit?: number
 }
 
 export interface AuditLog {

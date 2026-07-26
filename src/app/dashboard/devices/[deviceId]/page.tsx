@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { Device, Schedule, SensorReading, ConsumptionBucket, DeviceType, DEVICE_TYPE_LABELS } from '@/app/types'
+import { Device, Schedule, SensorReading, ConsumptionBucket, DeviceType } from '@/app/types'
 import { toast } from 'sonner'
 import {
     AreaChart, Area, BarChart, Bar,
@@ -9,12 +9,14 @@ import {
     ResponsiveContainer, LineChart, Line
 } from 'recharts'
 import { CityPicker, CitySelection } from '@/components/CityPicker'
+import { ChartTooltip } from '@/components/ChartTooltip'
+import { PowerMeterPanel, PMRange } from '@/components/powermeter/PowerMeterPanel'
 import {
     Select, SelectContent, SelectItem,
     SelectTrigger, SelectValue,
 } from '@/components/ui/select'
 
-type Range = '24h' | '7d' | '30d'
+type Range = '24h' | '7d' | '30d' | PMRange
 
 function computeDurationMinutes(startHh: string, startMm: string, endHh: string, endMm: string): number {
     const start = Number(startHh) * 60 + Number(startMm)
@@ -28,20 +30,6 @@ function computeDurationMinutes(startHh: string, startMm: string, endHh: string,
 function fmtTime(ts: number) { return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }
 function fmtDate(ts: number) { return new Date(ts).toLocaleDateString([], { month: 'short', day: 'numeric' }) }
 function fmtTs(ts: number, range: Range) { return range === '30d' ? fmtDate(ts) : fmtTime(ts) }
-
-const ChartTooltip = ({ active, payload, label }: { active?: boolean; payload?: Array<{ value: number; name: string; color?: string }>; label?: string }) => {
-    if (!active || !payload?.length) return null
-    return (
-        <div className="bg-card border border-border-light rounded-xl px-4 py-3 text-[0.82rem]">
-            <p className="text-text-muted m-0 mb-1.5">{label}</p>
-            {payload.map((p, i) => (
-                <p key={i} className="m-0 font-semibold" style={{ color: p.color ?? '#60a5fa' }}>
-                    {p.name}: {p.value}
-                </p>
-            ))}
-        </div>
-    )
-}
 
 // ── Graphs: OMS ────────────────────────────────────────────────────────────────
 
@@ -152,98 +140,6 @@ function FlowCharts({ readings, range }: { readings: SensorReading[]; range: Ran
                     <Tooltip content={<ChartTooltip />} />
                     <Line type="monotone" dataKey="cumulative" name="Cumulative (L)" stroke="#818cf8" strokeWidth={2} dot={false} />
                 </LineChart>
-            </ResponsiveContainer>
-        </div>
-    )
-}
-
-// ── Graphs: Power Meter ───────────────────────────────────────────────────────
-
-const Stat = ({ label, value, color }: { label: string; value: string; color: string }) => (
-    <div>
-        <div className="text-[0.72rem] text-text-muted uppercase tracking-wider">{label}</div>
-        <div className="text-[1.3rem] font-extrabold" style={{ color }}>{value}</div>
-    </div>
-)
-
-// Live one-line status — the most recent message's raw contents, so the
-// device page reads as a real-time feed rather than a historical chart.
-function PowerMeterLiveLine({ reading }: { reading: SensorReading | null }) {
-    if (!reading) return null
-    const agoSec = Math.max(0, Math.round((Date.now() - reading.timestamp) / 1000))
-    const agoLabel = agoSec < 60 ? `${agoSec}s ago` : `${Math.round(agoSec / 60)}m ago`
-
-    return (
-        <div className="glass-card px-4 py-3 mb-6 flex items-center gap-3 flex-wrap" style={{ borderColor: 'rgba(167,139,250,0.35)' }}>
-            <span className="w-2 h-2 rounded-full shrink-0" style={{ background: '#34d399', boxShadow: '0 0 6px #34d399' }} />
-            <span className="text-sm font-mono text-text-primary">
-                {reading.volt?.toFixed(1)}V · {reading.ampr?.toFixed(2)}A · {reading.watt?.toFixed(1)}W · PF {reading.pf?.toFixed(2)} · {reading.frqc?.toFixed(1)}Hz · {reading.unit?.toFixed(2)} kWh (meter total)
-            </span>
-            <span className="text-xs text-text-muted ml-auto shrink-0">Updated {agoLabel}</span>
-        </div>
-    )
-}
-
-// 24h: every raw message plotted individually (bar per reading).
-// 7d/30d: server-aggregated hourly/daily consumption — computed as diffs of
-// the cumulative "unit" register, not a raw sum.
-function PowerMeterCharts({ range, readings, buckets }: { range: Range; readings: SensorReading[]; buckets: ConsumptionBucket[] }) {
-    if (range === '24h') {
-        const data = readings.map(r => ({
-            time: fmtTime(r.timestamp),
-            watt: parseFloat((r.watt ?? 0).toFixed(1)),
-        }))
-        const avgWatt = readings.length ? readings.reduce((s, r) => s + (r.watt ?? 0), 0) / readings.length : 0
-        const peakWatt = readings.length ? Math.max(...readings.map(r => r.watt ?? 0)) : 0
-
-        return (
-            <div>
-                <div className="flex gap-6 mb-5 flex-wrap">
-                    <Stat label="Messages"   value={`${readings.length}`} color="#f472b6" />
-                    <Stat label="Avg Power"  value={`${avgWatt.toFixed(1)} W`} color="#f472b6" />
-                    <Stat label="Peak Power" value={`${peakWatt.toFixed(1)} W`} color="#f472b6" />
-                </div>
-                <p className="text-xs text-text-muted m-0 mb-3">Power per message (W) — every entry in the last 24h</p>
-                <ResponsiveContainer width="100%" height={280}>
-                    <BarChart data={data} margin={{ top: 5, right: 10, left: -10, bottom: 0 }}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-                        <XAxis dataKey="time" tick={{ fill: 'var(--text-muted)', fontSize: 10 }} axisLine={false} tickLine={false} interval="preserveStartEnd" minTickGap={20} />
-                        <YAxis tick={{ fill: 'var(--text-muted)', fontSize: 11 }} axisLine={false} tickLine={false} unit=" W" />
-                        <Tooltip content={<ChartTooltip />} />
-                        <Bar dataKey="watt" name="Power (W)" fill="#f472b6" radius={[2, 2, 0, 0]} opacity={0.85} />
-                    </BarChart>
-                </ResponsiveContainer>
-            </div>
-        )
-    }
-
-    const isDaily = range === '30d'
-    const data = buckets.map(b => ({
-        time: isDaily ? fmtDate(b.bucketStart) : fmtTime(b.bucketStart),
-        consumption: b.consumption,
-    }))
-    const totalKwh = buckets.reduce((s, b) => s + b.consumption, 0)
-    const activeBuckets = buckets.filter(b => b.readingCount > 0).length
-    const avgPerBucket = activeBuckets > 0 ? totalKwh / activeBuckets : 0
-
-    return (
-        <div>
-            <div className="flex gap-6 mb-5 flex-wrap">
-                <Stat label="Total Energy" value={`${totalKwh.toFixed(2)} kWh`} color="#34d399" />
-                <Stat label={isDaily ? 'Avg / Day' : 'Avg / Hour'} value={`${avgPerBucket.toFixed(3)} kWh`} color="#34d399" />
-                <Stat label={isDaily ? 'Days' : 'Hours'} value={`${buckets.length}`} color="#34d399" />
-            </div>
-            <p className="text-xs text-text-muted m-0 mb-3">
-                {isDaily ? 'Daily consumption (kWh) — last 30 days' : 'Hourly consumption (kWh) — last 7 days'}
-            </p>
-            <ResponsiveContainer width="100%" height={280}>
-                <BarChart data={data} margin={{ top: 5, right: 10, left: -10, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-                    <XAxis dataKey="time" tick={{ fill: 'var(--text-muted)', fontSize: 10 }} axisLine={false} tickLine={false} interval="preserveStartEnd" minTickGap={20} />
-                    <YAxis tick={{ fill: 'var(--text-muted)', fontSize: 11 }} axisLine={false} tickLine={false} unit=" kWh" />
-                    <Tooltip content={<ChartTooltip />} />
-                    <Bar dataKey="consumption" name="Consumption (kWh)" fill="#34d399" radius={[2, 2, 0, 0]} opacity={0.85} />
-                </BarChart>
             </ResponsiveContainer>
         </div>
     )
@@ -769,9 +665,14 @@ export default function DeviceDetailPage() {
     const [readings, setReadings] = useState<SensorReading[]>([])
     const [buckets, setBuckets] = useState<ConsumptionBucket[]>([])
     const [latestReading, setLatestReading] = useState<SensorReading | null>(null)
+    const [liveReadings, setLiveReadings] = useState<SensorReading[]>([])
+    const [last24hReadings, setLast24hReadings] = useState<SensorReading[]>([])
+    const [summaryBuckets, setSummaryBuckets] = useState<ConsumptionBucket[]>([])
+    const [todayHourlyBuckets, setTodayHourlyBuckets] = useState<ConsumptionBucket[]>([])
     const [range, setRange] = useState<Range>('7d')
     const [loading, setLoading] = useState(true)
     const [showSchedule, setShowSchedule] = useState(false)
+    const rangeDefaultedForPowerMeter = useRef(false)
 
     const loadDevice = useCallback(() => {
         fetch(`/api/devices/${deviceId}`).then(r => r.json()).then(d => setDevice(d.device ?? null))
@@ -788,6 +689,42 @@ export default function DeviceDetailPage() {
         fetch(`/api/devices/${deviceId}/latest`)
             .then(r => r.json())
             .then(d => { if (d.reading !== undefined) setLatestReading(d.reading) })
+            .catch(() => {})
+    }, [deviceId])
+
+    const pollLive = useCallback(() => {
+        fetch(`/api/devices/${deviceId}/readings?range=live`)
+            .then(r => r.json())
+            .then(d => setLiveReadings(d.readings ?? []))
+            .catch(() => {})
+    }, [deviceId])
+
+    // 30d daily buckets, independent of the visible chart tab — powers
+    // today/yesterday and both tabs of the Energy Consumption graph (7d is
+    // just the last 7 entries of this same daily array).
+    const loadSummary = useCallback(() => {
+        fetch(`/api/devices/${deviceId}/readings?range=30d`)
+            .then(r => r.json())
+            .then(d => setSummaryBuckets(d.buckets ?? []))
+            .catch(() => {})
+    }, [deviceId])
+
+    // Today's hourly buckets — powers the Energy Consumption graph's
+    // "Today" tab, independent of the visible Power Trend tab.
+    const loadTodayHourly = useCallback(() => {
+        fetch(`/api/devices/${deviceId}/readings?range=today`)
+            .then(r => r.json())
+            .then(d => setTodayHourlyBuckets(d.buckets ?? []))
+            .catch(() => {})
+    }, [deviceId])
+
+    // Last 24h raw readings, independent of the visible chart tab — powers
+    // the Insights strip's peak/avg/load-factor stats regardless of which
+    // trend tab is selected.
+    const loadLast24h = useCallback(() => {
+        fetch(`/api/devices/${deviceId}/readings?range=24h`)
+            .then(r => r.json())
+            .then(d => setLast24hReadings(d.readings ?? []))
             .catch(() => {})
     }, [deviceId])
 
@@ -809,12 +746,27 @@ export default function DeviceDetailPage() {
         return () => clearInterval(interval)
     }, [loadDevice, loadReadings, pollStatus])
 
+    // Power meter defaults to the "live" tab (not 7d) — that's the view
+    // people actually want the moment they open the page. Only applied
+    // once so it doesn't fight a manual tab switch afterwards.
+    useEffect(() => {
+        if (device?.type === 'power_meter' && !rangeDefaultedForPowerMeter.current) {
+            rangeDefaultedForPowerMeter.current = true
+            setRange('live')
+        }
+    }, [device?.type])
+
     useEffect(() => {
         if (device?.type !== 'power_meter') return
         pollLatest()
-        const interval = setInterval(pollLatest, 20_000)
-        return () => clearInterval(interval)
-    }, [device?.type, pollLatest])
+        pollLive()
+        loadSummary()
+        loadLast24h()
+        loadTodayHourly()
+        const liveInterval = setInterval(() => { pollLatest(); pollLive() }, 20_000)
+        const summaryInterval = setInterval(() => { loadSummary(); loadLast24h(); loadTodayHourly() }, 60_000)
+        return () => { clearInterval(liveInterval); clearInterval(summaryInterval) }
+    }, [device?.type, pollLatest, pollLive, loadSummary, loadLast24h, loadTodayHourly])
 
     const deleteSchedule = async (scheduleId: string) => {
         try {
@@ -841,69 +793,50 @@ export default function DeviceDetailPage() {
     const isOnline = effectiveLastSeen ? Date.now() - effectiveLastSeen < 5 * 60 * 1000 : false
     const accent = device?.type ? TYPE_ACCENT[device.type] : '#60a5fa'
 
-    const totalReadingsDisplay = buckets.length > 0
-        ? buckets.reduce((s, b) => s + b.readingCount, 0)
-        : readings.length
-
-    const metaItems = [
-        { label: 'Type',          value: device?.type ? DEVICE_TYPE_LABELS[device.type] : '—' },
-        { label: 'Total Readings', value: totalReadingsDisplay || '—' },
-        { label: 'Last Seen',     value: effectiveLastSeen ? new Date(effectiveLastSeen).toLocaleString() : 'Never' },
-        { label: 'Schedules',     value: (device?.schedules ?? []).length },
-        { label: 'Added',         value: device?.createdAt ? new Date(device.createdAt).toLocaleDateString() : '—' },
-    ]
-
     return (
         <div className="max-w-[1200px] mx-auto">
-            <button onClick={() => router.back()} className="btn-ghost mb-5 text-[0.85rem]">
-                ← Back to Devices
-            </button>
-
-            {/* Header card */}
-            <div className="glass-card p-6 mb-6">
-                <div className="flex items-start justify-between flex-wrap gap-4">
-                    <div className="flex items-center gap-4">
-                        <div className="w-14 h-14 rounded-2xl flex items-center justify-center"
+            {/* Compact header — name/status only; anything else lives in the
+                sections below rather than being repeated on every visit. */}
+            <div className="flex items-center gap-3 mb-6">
+                <button onClick={() => router.back()} className="btn-ghost px-2.5 py-2 text-sm shrink-0" aria-label="Back to devices">
+                    ←
+                </button>
+                <div className="glass-card px-4 py-3 flex-1 flex items-center justify-between gap-3 flex-wrap min-w-0">
+                    <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
                              style={{
                                  background: `linear-gradient(135deg, ${accent}22, ${accent}11)`,
                                  border: `1px solid ${accent}44`,
                                  color: accent,
                              }}>
                             {device?.type === 'liquid_flow' ? (
-                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                     <path d="M12 2C6.5 11 2 15.4 2 17.5 2 20.5 6.7 23 12 23s10-2.5 10-5.5C22 15.4 17.5 11 12 2z"/>
                                 </svg>
                             ) : (
-                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                     <path d="M18.36 6.64A9 9 0 0 1 20.77 15"/><path d="M6.16 6.16a9 9 0 1 0 12.68 12.68"/>
                                     <line x1="12" y1="2" x2="12" y2="12"/><line x1="2" y1="2" x2="22" y2="22"/>
                                 </svg>
                             )}
                         </div>
-                        <div>
-                            <h1 className="text-[1.4rem] font-extrabold text-text-primary m-0">
+                        <div className="min-w-0">
+                            <h1 className="text-[1.05rem] font-extrabold text-text-primary m-0 truncate">
                                 {device?.name ?? 'Loading...'}
                             </h1>
-                            <p className="text-text-muted text-[0.8rem] m-0 mt-0.5 font-mono">{deviceId}</p>
+                            <p className="text-text-muted text-[0.72rem] m-0 font-mono truncate">
+                                {deviceId}{device?.location ? ` · 📍 ${device.location}` : ''}
+                            </p>
                         </div>
                     </div>
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-2 shrink-0">
+                        {device?.type === 'oms' && (device?.schedules ?? []).length > 0 && (
+                            <span className="text-[0.75rem] text-text-muted">{device!.schedules!.length} schedule{device!.schedules!.length > 1 ? 's' : ''}</span>
+                        )}
                         <span className={isOnline ? 'badge-online' : 'badge-offline'}>
                             {isOnline ? '● Online' : '○ Offline'}
                         </span>
-                        {device?.location && (
-                            <span className="text-[0.8rem] text-text-secondary">📍 {device.location}</span>
-                        )}
                     </div>
-                </div>
-
-                <div className="flex gap-8 mt-5 flex-wrap">
-                    {metaItems.map(m => (
-                        <div key={m.label}>
-                            <div className="text-[0.72rem] text-text-muted uppercase tracking-wider">{m.label}</div>
-                            <div className="text-[0.9rem] font-semibold text-text-secondary mt-0.5">{m.value}</div>
-                        </div>
-                    ))}
                 </div>
             </div>
 
@@ -912,14 +845,30 @@ export default function DeviceDetailPage() {
                 <OmsControl deviceId={deviceId} initialDuration={device.defaultDuration} />
             )}
 
-            {/* Live status — power meter only */}
-            {device?.type === 'power_meter' && <PowerMeterLiveLine reading={latestReading} />}
+            {/* Power meter — dedicated live + historical dashboard */}
+            {device?.type === 'power_meter' && (
+                <PowerMeterPanel
+                    deviceId={deviceId}
+                    location={device.location}
+                    latestReading={latestReading}
+                    liveReadings={liveReadings}
+                    last24hReadings={last24hReadings}
+                    readings={readings}
+                    buckets={buckets}
+                    range={range as PMRange}
+                    onRangeChange={setRange}
+                    loading={loading}
+                    summaryBuckets={summaryBuckets}
+                    todayHourlyBuckets={todayHourlyBuckets}
+                />
+            )}
 
-            {/* Charts */}
+            {/* Charts — oms / liquid_flow only (power_meter has its own panel above) */}
+            {device?.type !== 'power_meter' && (
             <div className="glass-card p-5 mb-6">
                 <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
                     <h2 className="m-0 text-base font-bold text-text-primary">
-                        {device?.type === 'oms' ? 'Switch Activity' : device?.type === 'liquid_flow' ? 'Flow & Consumption' : 'Power & Energy'}
+                        {device?.type === 'oms' ? 'Switch Activity' : 'Flow & Consumption'}
                     </h2>
                     <div className="flex gap-1.5">
                         {(['24h', '7d', '30d'] as Range[]).map(r => (
@@ -935,9 +884,7 @@ export default function DeviceDetailPage() {
                 </div>
 
                 {(() => {
-                    const isEmpty = device?.type === 'power_meter' && range !== '24h'
-                        ? buckets.every(b => b.readingCount === 0)
-                        : readings.length === 0
+                    const isEmpty = readings.length === 0
 
                     if (loading) return (
                         <div className="flex justify-center py-10">
@@ -950,10 +897,10 @@ export default function DeviceDetailPage() {
                         </div>
                     )
                     if (device?.type === 'oms') return <OmsCharts readings={readings} range={range} />
-                    if (device?.type === 'liquid_flow') return <FlowCharts readings={readings} range={range} />
-                    return <PowerMeterCharts readings={readings} buckets={buckets} range={range} />
+                    return <FlowCharts readings={readings} range={range} />
                 })()}
             </div>
+            )}
 
             {/* Schedules */}
             {device?.type === 'oms' && (
