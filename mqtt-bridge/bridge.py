@@ -4,6 +4,7 @@ MQTT-to-API Bridge
 Topic routing:
   MQTT_STATUS_TOPIC  (default: pit_fbk)       — device alive pings       → /api/heartbeat
   MQTT_FLOW_TOPIC    (default: pit_fbk/flow)  — oms/liquid_flow readings → /api/readings
+  MQTT_BLE_TOPIC     (default: pit_fbk/ble)   — BLE water-level beacons → /api/v1/ingest/ble
   MQTT_LOGG_TOPIC    (default: pit_fbk/logg)  — mixed-content channel;
                                                  only power_meter-shaped
                                                  items are extracted and
@@ -80,6 +81,7 @@ MQTT_CLIENT_ID = _optional("MQTT_CLIENT_ID", f"bridge-{int(time.time())}")
 MQTT_FLOW_TOPIC   = _optional("MQTT_FLOW_TOPIC",   "pit_fbk/flow")
 MQTT_STATUS_TOPIC = _optional("MQTT_STATUS_TOPIC", "pit_fbk")
 MQTT_LOGG_TOPIC   = _optional("MQTT_LOGG_TOPIC",   "pit_fbk/logg")
+MQTT_BLE_TOPIC    = _optional("MQTT_BLE_TOPIC",    "pit_fbk/ble")
 
 # Field name used in status pings to carry the device id
 STATUS_DEVICE_ID_FIELD = _optional("STATUS_DEVICE_ID_FIELD", "device_id")
@@ -88,6 +90,7 @@ _api_base      = _require("API_URL").rstrip("/")
 READINGS_URL   = f"{_api_base}/readings"
 HEARTBEAT_URL  = f"{_api_base}/heartbeat"
 SCHEDULES_URL  = f"{_api_base}/schedules/all"
+BLE_URL        = f"{_api_base}/v1/ingest/ble"
 
 API_KEY = _optional("BRIDGE_API_KEY")
 
@@ -266,6 +269,44 @@ def _handle_flow(topic: str, raw: str) -> None:
     else:
         log.error("Readings API %s [%s]: %.300s", resp.status_code, topic, resp.text)
         stats["readings_failed"] += len(valid)
+
+# ──────────────────────────────────────────────
+# BLE topic — water-level beacons relayed by phone gateways.
+# Forwarded as-is to the mobile app API (v1), which validates and
+# de-duplicates (the same frame can arrive from several phones).
+# ──────────────────────────────────────────────
+
+
+def _handle_ble(topic: str, raw: str) -> None:
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        log.error("Bad JSON on ble [%s]: %s | %.200s", topic, exc, raw)
+        stats["readings_failed"] += 1
+        return
+
+    fbk = data.get("fbk") if isinstance(data, dict) else None
+    if not isinstance(fbk, list) or not fbk:
+        log.error("Missing/empty 'fbk' array on [%s]: %.200s", topic, raw)
+        stats["readings_failed"] += 1
+        return
+
+    try:
+        resp = _http.post(BLE_URL, json={"fbk": fbk}, headers=_api_headers(), timeout=10)
+    except requests.RequestException as exc:
+        log.error("BLE API failed [%s]: %s", topic, exc)
+        stats["readings_failed"] += len(fbk)
+        return
+
+    if resp.status_code == 200:
+        result = resp.json()
+        log.info("[ble] %d item(s) → saved=%d duplicate=%d invalid=%d",
+                 len(fbk), result.get("saved", 0), result.get("duplicate", 0), result.get("invalid", 0))
+        stats["readings_forwarded"] += result.get("saved", 0)
+        stats["readings_failed"]    += result.get("invalid", 0)
+    else:
+        log.error("BLE API %s [%s]: %.300s", resp.status_code, topic, resp.text)
+        stats["readings_failed"] += len(fbk)
 
 # ──────────────────────────────────────────────
 # Logg topic — mixed-content channel, power_meter only.
@@ -517,7 +558,9 @@ def on_connect(client, userdata, flags, rc, properties=None):
         client.subscribe(MQTT_FLOW_TOPIC,   qos=1)
         client.subscribe(MQTT_LOGG_TOPIC,   qos=1)
         client.subscribe(MQTT_STATUS_TOPIC, qos=0)  # QoS 0 is fine for heartbeats
-        log.info("Subscribed: flow=%s  logg=%s  status=%s", MQTT_FLOW_TOPIC, MQTT_LOGG_TOPIC, MQTT_STATUS_TOPIC)
+        client.subscribe(MQTT_BLE_TOPIC,    qos=1)
+        log.info("Subscribed: flow=%s  logg=%s  status=%s  ble=%s",
+                 MQTT_FLOW_TOPIC, MQTT_LOGG_TOPIC, MQTT_STATUS_TOPIC, MQTT_BLE_TOPIC)
         HEALTH_FILE.touch()
         if not _scheduler_started:
             _scheduler_started = True
@@ -551,6 +594,8 @@ def on_message(client, userdata, msg):
         _handle_logg(topic, raw)
     elif topic == MQTT_STATUS_TOPIC:
         _handle_status(topic, raw)
+    elif topic == MQTT_BLE_TOPIC:
+        _handle_ble(topic, raw)
     else:
         log.debug("Unhandled topic [%s] — ignoring", topic)
 
@@ -626,6 +671,7 @@ def main():
     log.info("Flow     : %s → %s", MQTT_FLOW_TOPIC, READINGS_URL)
     log.info("Logg     : %s → %s (power_meter only)", MQTT_LOGG_TOPIC, READINGS_URL)
     log.info("Status   : %s → %s", MQTT_STATUS_TOPIC, HEARTBEAT_URL)
+    log.info("BLE      : %s → %s", MQTT_BLE_TOPIC, BLE_URL)
     log.info("Auth     : %s", "Bearer ***" if API_KEY else "none (dev)")
     log.info("Debounce : %ds", HEARTBEAT_DEBOUNCE)
     log.info("Schedule : %s → %s (tz=%s)", SCHEDULES_URL, MQTT_OMS_TOPIC, SCHEDULE_TZ)
