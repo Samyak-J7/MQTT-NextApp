@@ -16,13 +16,14 @@ const tables = [
         KeySchema: [{ AttributeName: 'email', KeyType: 'HASH' }],
     },
     {
-        TableName: 'Devices',
+        // One row per (device, owner), up to 5 owners per device. See src/lib/v1/store.ts.
+        TableName: 'DeviceClaims',
         AttributeDefinitions: [
             { AttributeName: 'deviceId', AttributeType: 'S' },
             { AttributeName: 'userId', AttributeType: 'S' },
             { AttributeName: 'createdAt', AttributeType: 'N' },
         ],
-        KeySchema: [{ AttributeName: 'deviceId', KeyType: 'HASH' }],
+        KeySchema: [{ AttributeName: 'deviceId', KeyType: 'HASH' }, { AttributeName: 'userId', KeyType: 'RANGE' }],
         GlobalSecondaryIndexes: [{
             IndexName: 'byUser',
             KeySchema: [{ AttributeName: 'userId', KeyType: 'HASH' }, { AttributeName: 'createdAt', KeyType: 'RANGE' }],

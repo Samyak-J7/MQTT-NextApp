@@ -19,11 +19,13 @@ The token lasts 30 days; on any `401`, send the user back to login.
 ## Devices
 
 A device is identified by its BLE MAC (`E072A16F6B1A`; `e0:72:a1:6f:6b:1a` is also accepted).
+Up to **5 accounts** can add the same device. Each keeps its own `name` and `location` for it,
+and deleting only removes it from your account.
 
 | Method | Path | Body | Returns |
 |---|---|---|---|
 | GET | `/devices` | — | `{ devices: Device[] }` |
-| POST | `/devices` | `{ deviceId, name, location? }` | `201 { device }` · `409 device_taken` |
+| POST | `/devices` | `{ deviceId, name, location? }` | `201 { device }` · `409 already_added` · `409 device_full` (5 accounts have it) |
 | GET | `/devices/{deviceId}` | — | `{ device }` |
 | PATCH | `/devices/{deviceId}` | `{ name?, location? }` (`location: null` clears) | `{ device }` |
 | DELETE | `/devices/{deviceId}` | — | `204` |
@@ -32,7 +34,7 @@ A device is identified by its BLE MAC (`E072A16F6B1A`; `e0:72:a1:6f:6b:1a` is al
 { "deviceId": "E072A16F6B1A", "name": "Terrace tank", "location": "Roof", "createdAt": 1794744130255,
   "latest": { "ts": 1794744130255, "sRead": 66, "lipo": 2383, "txNum": 1878, "rssi": -33 } }
 ```
-`latest` is `null` until the device has sent something. Another user's device returns `404`.
+`latest` is `null` until the device has sent something. A device not in your account returns `404`.
 
 ## Readings
 
@@ -59,8 +61,10 @@ The same frame relayed by two phones is stored once.
 ## Setup
 
 1. Create the tables (once): `node --env-file=.env.local scripts/create-v1-tables.mjs`
-   → `Users` (PK email), `Devices` (PK deviceId, GSI byUser), `Readings` (PK deviceId, SK ts).
-   If the AWS key's IAM policy lists table names, add these three (and `Devices/index/*`).
+   → `Users` (PK email), `DeviceClaims` (PK deviceId, SK userId, GSI byUser), `Readings` (PK deviceId, SK ts).
+   If the AWS key's IAM policy lists table names, add these three (and `DeviceClaims/index/*`).
+   Upgrading from the single-owner `Devices` table: run the script above, then
+   `node --env-file=.env.local scripts/migrate-device-claims.mjs` (re-runnable), then redeploy.
 2. Vercel env: add `API_JWT_SECRET` (≥ 32 chars, e.g. `openssl rand -base64 48`).
    `BRIDGE_API_KEY` is already there.
 3. Redeploy the bridge (`fly deploy` in `mqtt-bridge/`). It now also subscribes to `pit_fbk/ble`.

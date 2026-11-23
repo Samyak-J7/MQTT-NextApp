@@ -3,11 +3,12 @@ import { DynamoDBDocumentClient } from '@aws-sdk/lib-dynamodb'
 
 // Tables for the new mobile app (API v1). Separate from the legacy MQTT* tables.
 //   Users    — PK email
-//   Devices  — PK deviceId · GSI byUser (userId, createdAt)
+//   DeviceClaims — PK deviceId, SK userId · GSI byUser (userId, createdAt); up to 5 owners per device
 //   Readings — PK deviceId, SK ts
+// The older single-owner Devices table is only read by scripts/migrate-device-claims.mjs.
 export const TABLES = {
     users: 'Users',
-    devices: 'Devices',
+    deviceClaims: 'DeviceClaims',
     readings: 'Readings',
 }
 
