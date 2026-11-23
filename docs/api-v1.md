@@ -32,7 +32,7 @@ and deleting only removes it from your account.
 
 ```json
 { "deviceId": "E072A16F6B1A", "name": "Terrace tank", "location": "Roof", "createdAt": 1794744130255,
-  "latest": { "ts": 1794744130255, "sRead": 66, "lipo": 2383, "txNum": 1878, "rssi": -33 } }
+  "latest": { "ts": 1794744130255, "sRead": 66, "lipo": 87, "txNum": 1878, "rssi": -33 } }
 ```
 `latest` is `null` until the device has sent something. A device not in your account returns `404`.
 
@@ -41,12 +41,12 @@ and deleting only removes it from your account.
 `GET /devices/{deviceId}/readings?from=&to=&limit=` — newest first, `limit` 1–1000 (default 200).
 
 ```json
-{ "deviceId": "E072A16F6B1A", "readings": [ { "ts": 1794744130255, "sRead": 66, "lipo": 2383, "txNum": 1878, "rssi": -33 } ] }
+{ "deviceId": "E072A16F6B1A", "readings": [ { "ts": 1794744130255, "sRead": 66, "lipo": 87, "txNum": 1878, "rssi": -33 } ] }
 ```
 
 Field meanings (raw values, the app converts them for display):
 - `sRead` — tank level, % full (0–100)
-- `lipo` — battery raw value; volts = `lipo / 650` (2600 = 4.0 V full, 1950 = 3.0 V empty)
+- `lipo` — battery % charge (0–100), computed by the sensor; values outside 0–100 mean unknown
 - `txNum` — transmission counter; gaps mean missed readings
 - `rssi` — signal strength at the relaying phone, dBm
 
